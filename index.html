@@ -645,33 +645,8 @@ function renderSummary(){
         </div>
       </div>
 
-      <div class="card">
-        <div class="card-head"><h2>담당자별 수금 현황</h2><span class="sub">${ymKey(cursor)}</span></div>
-        <div class="mini">${ownerHTML(cursor)}</div>
-      </div>
     </div>
   </div>`;
-}
-
-function ownerHTML(base){
-  const map = {};
-  DB.schedules.filter(s=>s.active).forEach(s=>{
-    const k = s.owner || '미지정';
-    map[k] = map[k] || {plan:0, paid:0, n:0};
-    map[k].plan += Number(s.amount)||0; map[k].n++;
-    if(isPaid(s, base)) map[k].paid += Number(s.amount)||0;
-  });
-  const keys = Object.keys(map);
-  if(!keys.length) return '<div class="empty">데이터 없음</div>';
-  return keys.map(k=>{
-    const v = map[k], r = v.plan ? Math.round(v.paid/v.plan*100) : 0;
-    return `<div class="mini-row" style="flex-direction:column;align-items:stretch;gap:7px">
-      <div class="row"><b style="font-size:13px">${esc(k)}</b>
-        <span class="badge b-mute">${v.n}개사</span>
-        <span style="margin-left:auto" class="num" style="font-size:12px">${manwon(v.paid)} / ${manwon(v.plan)}</span></div>
-      <div class="bar"><i class="b-ok-bg" style="width:${r}%"></i></div>
-    </div>`;
-  }).join('');
 }
 
 function calendarHTML(base){
