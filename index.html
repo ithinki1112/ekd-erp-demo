@@ -82,15 +82,28 @@ a{color:var(--accent); text-decoration:none}
 .page-head{display:flex; align-items:flex-end; gap:14px; flex-wrap:wrap; margin-bottom:18px}
 .page-head h1{margin:0; font-size:24px; letter-spacing:-.5px}
 .page-head p{margin:4px 0 0; color:var(--muted); font-size:13px}
-.tabs{display:flex; gap:6px; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:5px; margin-bottom:20px; width:fit-content; flex-wrap:wrap}
-.tab{
-  padding:9px 18px; border-radius:8px; border:0; background:transparent; color:var(--muted);
-  font-weight:600; font-size:13.5px; display:flex; align-items:center; gap:7px;
+/* 섹션 바로가기 (탭 대신) */
+html{scroll-behavior:smooth; scroll-padding-top:120px}
+@media (prefers-reduced-motion: reduce){ html{scroll-behavior:auto} }
+.secnav{
+  position:sticky; top:58px; z-index:50; display:flex; gap:6px; flex-wrap:wrap;
+  background:var(--panel); border:1px solid var(--line); border-radius:12px;
+  padding:6px; margin-bottom:20px; width:fit-content; max-width:100%;
 }
-.tab:hover{color:var(--text2)}
-.tab.active{background:var(--accent); color:#fff; box-shadow:0 2px 10px rgba(59,110,246,.35)}
-.tab .cnt{font-size:11px; padding:1px 6px; border-radius:20px; background:rgba(255,255,255,.16)}
-.tab:not(.active) .cnt{background:var(--panel3); color:var(--muted)}
+.secnav a{
+  padding:8px 15px; border-radius:8px; color:var(--muted); font-weight:600; font-size:13px;
+  display:flex; align-items:center; gap:7px; text-decoration:none;
+}
+.secnav a:hover{background:var(--panel2); color:var(--text)}
+.secnav a:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+.secnav .cnt{font-size:11px; padding:1px 6px; border-radius:20px; background:var(--panel3); color:var(--muted)}
+section[id^="sec-"]{scroll-margin-top:120px; display:block}
+section[id^="sec-"] + section[id^="sec-"]{margin-top:16px}
+.sec-label{
+  display:flex; align-items:center; gap:8px; margin:0 0 10px 2px;
+  font-size:12px; font-weight:700; letter-spacing:.4px; color:var(--muted);
+}
+.sec-label::after{content:""; flex:1; height:1px; background:var(--line)}
 
 .card{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:18px}
 .card + .card{margin-top:16px}
@@ -384,15 +397,20 @@ tr.editing td{box-shadow:inset 0 0 0 1px var(--accent-line)}
     </div>
   </div>
 
-  <div class="tabs">
-    <button class="tab active" data-view="dash">📊 월간 요약 대시보드</button>
-    <button class="tab" data-view="pay">💰 입금 관리 <span class="cnt" id="tabPayCnt">0</span></button>
-    <button class="tab" data-view="meet">🗓 미팅 일정 <span class="cnt" id="tabMeetCnt">0</span></button>
-  </div>
+  <nav class="secnav">
+    <a href="#sec-summary">📅 이번 달 현황</a>
+    <a href="#sec-company">🏢 업체 등록</a>
+    <a href="#sec-paylist">💰 입금 현황 <span class="cnt" id="navPayCnt">0</span></a>
+    <a href="#sec-meetform">✍️ 미팅 등록</a>
+    <a href="#sec-meetlist">🗓 미팅 목록 <span class="cnt" id="navMeetCnt">0</span></a>
+  </nav>
 
-  <section id="view-dash"></section>
-  <section id="view-pay" style="display:none"></section>
-  <section id="view-meet" style="display:none"></section>
+  <div id="bannerSlot"></div>
+  <section id="sec-summary"></section>
+  <section id="sec-company"></section>
+  <section id="sec-paylist"></section>
+  <section id="sec-meetform"></section>
+  <section id="sec-meetlist"></section>
 </div>
 
 <div class="modal-back" id="modalRoot"></div>
@@ -437,7 +455,6 @@ function seed(){
 
 /* ---------- state ---------- */
 let DB = load();
-let view = 'dash';
 let cursor = startOfMonth(new Date());          // 대시보드/목록 기준 월
 let payEdit = null, meetEdit = null;
 let editForm = null;            // 목록에서 인라인 수정 중인 업체의 임시 값
@@ -556,125 +573,57 @@ function buildAlerts(){
 /* =====================================================================
    RENDER : 월간 요약 대시보드
    ===================================================================== */
-function renderDash(){
-  const s = summary(cursor);
+function renderSummary(){
   const act = DB.schedules.filter(x=>x.active);
   const alerts = buildAlerts();
   const late = act.filter(x=>statusOf(x,cursor)==='late');
-  const rows = act.map(x=>({sc:x, due:dueDateOf(x,cursor), st:statusOf(x,cursor)}))
-                  .sort((a,b)=>a.due-b.due);
+  const s = summary(cursor);
+  const rows = act.map(x=>({sc:x, due:dueDateOf(x,cursor), st:statusOf(x,cursor)})).sort((a,b)=>a.due-b.due);
   const upcoming = rows.filter(r=>r.st!=='paid');
   const t = today();
-  const mtgs = DB.meetings.slice().sort((a,b)=> (a.date+a.time).localeCompare(b.date+b.time))
+  const mtgs = DB.meetings.slice().sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time))
                  .filter(m=> diffDays(new Date(m.date+'T00:00'), t) >= 0).slice(0,5);
 
-  const pct = v => s.planned ? (v/s.planned*100) : 0;
-
-  let bannerHTML = '';
+  /* 미입금 / 알림 배너 */
+  let banner = '';
   if(late.length){
-    bannerHTML = '<div class="banner danger"><span class="ic">⚠️</span>'
+    banner = '<div class="banner danger"><span class="ic">⚠️</span>'
       + '<div><b>미입금 ' + late.length + '건 · ' + won(s.lateAmt) + '원</b> — 예정일이 지난 업체가 있습니다. 담당자 확인이 필요합니다.</div>'
-      + '<div class="right"><button class="btn sm danger" data-goto="pay" data-status="late">미입금 목록 보기</button></div></div>';
+      + '<div class="right"><button class="btn sm danger" data-jump="sec-paylist" data-status="late">미입금 목록 보기</button></div></div>';
   } else if(alerts.length){
-    bannerHTML = '<div class="banner"><span class="ic">🔔</span>'
+    banner = '<div class="banner"><span class="ic">🔔</span>'
       + '<div><b>오늘의 알림 ' + alerts.length + '건</b> — 입금 예정 / 미팅 전날 알림이 있습니다.</div>'
       + '<div class="right"><button class="btn sm" id="openBell2">알림 보기</button></div></div>';
   }
+  document.getElementById('bannerSlot').innerHTML = banner;
 
-  document.getElementById('view-dash').innerHTML = bannerHTML + `
-  <div class="grid g-4" style="margin-bottom:16px">
-    <div class="kpi">
-      <div class="label">📌 이번 달 총 입금 예정액</div>
-      <div class="value num">${won(s.planned)}<small>원</small></div>
-      <div class="foot">활성 업체 ${s.total}곳 · 평균 ${won(Math.round(s.planned/(s.total||1)))}원</div>
-    </div>
-    <div class="kpi ok">
-      <div class="label">✅ 입금 완료액</div>
-      <div class="value num" style="color:var(--ok)">${won(s.paid)}<small>원</small></div>
-      <div class="foot">${s.cPaid}건 완료 · 달성률 <b style="color:var(--ok)">${s.rate}%</b></div>
-    </div>
-    <div class="kpi warn">
-      <div class="label">🕗 미입금액</div>
-      <div class="value num" style="color:var(--warn)">${won(s.unpaid)}<small>원</small></div>
-      <div class="foot">대기 ${s.cWait}건 · <span style="color:var(--danger)">연체 ${s.cLate}건</span></div>
-    </div>
-    <div class="kpi pp">
-      <div class="label">📈 수금 진행률</div>
-      <div class="value num">${s.rate}<small>%</small></div>
-      <div class="bar" style="margin-top:10px">
-        <i class="b-ok-bg" style="width:${pct(s.paid)}%"></i>
-        <i class="b-late-bg" style="width:${pct(s.lateAmt)}%"></i>
-        <i class="b-wait-bg" style="width:${pct(s.waitAmt)}%"></i>
-      </div>
-      <div class="legend">
-        <span><i class="b-ok-bg"></i>완료 ${manwon(s.paid)}</span>
-        <span><i class="b-late-bg"></i>연체 ${manwon(s.lateAmt)}</span>
-        <span><i class="b-wait-bg"></i>대기 ${manwon(s.waitAmt)}</span>
-      </div>
-    </div>
-  </div>
-
+  document.getElementById('sec-summary').innerHTML = `
+  <div class="sec-label">이번 달 현황</div>
   <div class="grid g-dash">
-    <div>
-      <div class="card">
-        <div class="card-head">
-          <h2>업체별 입금 현황</h2>
-          <span class="sub">${ymKey(cursor)} 기준 · 입금일 순</span>
-          <div class="right"><button class="btn sm" data-goto="pay">전체 관리 →</button></div>
-        </div>
-        <div class="tbl-wrap">
-          <table>
-            <thead><tr>
-              <th style="width:30%">업체명</th><th>입금 예정일</th><th class="c">D-day</th>
-              <th class="r">요청 금액</th><th class="c">상태</th><th class="c">처리</th>
-            </tr></thead>
-            <tbody>
-              ${rows.length ? rows.map(r=>{
-                const m = STATUS_META[r.st];
-                return `<tr>
-                  <td class="co">${esc(r.sc.name)}<small>${esc(r.sc.owner||'담당 미지정')} · ${dueLabel(r.sc)}</small></td>
-                  <td class="num">${fmtDate(r.due)}</td>
-                  <td class="c num" style="color:${r.st==='late'?'var(--danger)':r.st==='soon'?'var(--warn)':'var(--muted)'};font-weight:700">
-                    ${r.st==='paid'?'—':ddayText(r.due)}</td>
-                  <td class="r num" style="font-weight:700">${won(r.sc.amount)}원</td>
-                  <td class="c"><span class="badge ${m.cls}">${m.txt}</span></td>
-                  <td class="c">${r.st==='paid'
-                    ? '<button class="btn sm" data-unpay="'+r.sc.id+'">취소</button>'
-                    : '<button class="btn sm ok" data-pay="'+r.sc.id+'">입금확인</button>'}</td>
-                </tr>`;
-              }).join('') : '<tr><td colspan="6" class="empty"><b>등록된 입금 일정이 없습니다</b>입금 관리 탭에서 업체를 등록해 주세요.</td></tr>'}
-            </tbody>
-            <tfoot><tr>
-              <td colspan="3">합계 (${rows.length}건)</td>
-              <td class="r num">${won(s.planned)}원</td>
-              <td colspan="2" class="c num">완료 ${won(s.paid)}원</td>
-            </tr></tfoot>
-          </table>
-        </div>
+    <div class="card">
+      <div class="card-head">
+        <h2>${cursor.getFullYear()}년 ${cursor.getMonth()+1}월 캘린더</h2>
+        <span class="sub">입금 예정 · 미팅 일정 · 항목을 클릭하면 상세보기/수정</span>
       </div>
-
-      <div class="card">
-        <div class="card-head"><h2>${cursor.getMonth()+1}월 캘린더</h2><span class="sub">입금 예정 · 미팅 일정</span></div>
-        ${calendarHTML(cursor)}
-        <div class="legend">
-          <span><i class="b-wait-bg"></i>입금예정</span>
-          <span><i class="b-ok-bg"></i>입금완료</span>
-          <span><i class="b-late-bg"></i>연체</span>
-          <span><i style="background:var(--purple)"></i>미팅</span>
-        </div>
+      ${calendarHTML(cursor)}
+      <div class="legend">
+        <span><i class="b-wait-bg"></i>입금예정</span>
+        <span><i class="b-ok-bg"></i>입금완료</span>
+        <span><i class="b-late-bg"></i>연체</span>
+        <span><i style="background:var(--purple)"></i>미팅</span>
       </div>
     </div>
 
     <div>
       <div class="card">
-        <div class="card-head"><h2>입금 예정 알림</h2><span class="sub">미완료 순</span></div>
+        <div class="card-head"><h2>입금 예정 알림</h2><span class="sub">미완료 ${upcoming.length}건</span></div>
         <div class="mini">
           ${upcoming.length ? upcoming.map(r=>`
             <div class="mini-row" data-ev="pay|${r.sc.id}">
               <div class="dt">${(r.due.getMonth()+1)}/${r.due.getDate()}</div>
               <div class="n">${esc(r.sc.name)}</div>
               <div class="a num">${manwon(r.sc.amount)}</div>
-              <span class="badge ${STATUS_META[r.st].cls}">${r.st==='late'?ddayText(r.due):ddayText(r.due)}</span>
+              <span class="badge ${STATUS_META[r.st].cls}">${ddayText(r.due)}</span>
             </div>`).join('')
             : '<div class="empty">이번 달 입금이 모두 완료되었습니다 🎉</div>'}
         </div>
@@ -683,7 +632,7 @@ function renderDash(){
       <div class="card">
         <div class="card-head">
           <h2>다가오는 미팅</h2>
-          <div class="right"><button class="btn sm" data-goto="meet">일정 관리 →</button></div>
+          <div class="right"><button class="btn sm" data-jump="sec-meetform">미팅 등록 →</button></div>
         </div>
         <div class="mini">
           ${mtgs.length ? mtgs.map(m=>{
@@ -693,12 +642,12 @@ function renderDash(){
               <div class="n">${esc(m.company)}<div style="font-weight:500;color:var(--muted);font-size:11.5px">${esc(m.time||'')} · ${esc(m.mode||'')} ${esc(m.place||'')}</div></div>
               <span class="badge ${dd<=1?'b-soon':'b-pp'}">${dd===0?'오늘':dd===1?'내일':'D-'+dd}</span>
             </div>`;
-          }).join('') : '<div class="empty"><b>예정된 미팅이 없습니다</b>미팅 일정 탭에서 등록해 주세요.</div>'}
+          }).join('') : '<div class="empty"><b>예정된 미팅이 없습니다</b>아래 미팅 등록에서 추가해 주세요.</div>'}
         </div>
       </div>
 
       <div class="card">
-        <div class="card-head"><h2>담당자별 수금 현황</h2></div>
+        <div class="card-head"><h2>담당자별 수금 현황</h2><span class="sub">${ymKey(cursor)}</span></div>
         <div class="mini">${ownerHTML(cursor)}</div>
       </div>
     </div>
@@ -765,64 +714,53 @@ function calendarHTML(base){
 /* =====================================================================
    RENDER : 입금 관리
    ===================================================================== */
-function renderPay(){
-  const e = null;                       // 상단 폼은 신규 등록 전용 (수정은 목록에서 인라인 편집)
-  const leads = form.leads, chans = form.channels;
+/* ---------- 업체 등록 폼 ---------- */
+function renderCompanyForm(){
+  const leads = form.leads, chans = form.channels, d = form.draft || {};
   const LEADS = [{v:7,t:'7일 전'},{v:3,t:'3일 전'},{v:1,t:'1일 전'},{v:0,t:'당일'}];
   const CHANS = ['사내알림','이메일','카카오톡','SMS'];
 
-  let list = DB.schedules.slice();
-  if(payFilter.q) list = list.filter(s=>(s.name+s.owner+s.memo).toLowerCase().includes(payFilter.q.toLowerCase()));
-  if(payFilter.status!=='all') list = list.filter(s=> s.active && statusOf(s,cursor)===payFilter.status);
-  list.sort((a,b)=>{
-    if(payFilter.sort==='amount') return (b.amount||0)-(a.amount||0);
-    if(payFilter.sort==='name') return a.name.localeCompare(b.name,'ko');
-    return dueDateOf(a,cursor) - dueDateOf(b,cursor);
-  });
-  const sum = list.filter(s=>s.active).reduce((a,s)=>a+(Number(s.amount)||0),0);
-
-  document.getElementById('view-pay').innerHTML = `
+  document.getElementById('sec-company').innerHTML = `
+  <div class="sec-label">업체 등록</div>
   <div class="card">
     <div class="card-head">
-      <h2>${e ? '✏️ 입금 일정 수정' : '➕ 업체별 입금 일정 등록'}</h2>
-      <span class="sub">매월 반복되는 입금 예정일과 요청 금액, 알림 시점을 설정합니다.</span>
+      <h2>🏢 업체 등록</h2>
+      <span class="sub">매월 반복되는 입금 예정일과 요청 금액, 알림 시점을 설정합니다. 등록한 업체는 아래 목록에서 바로 수정할 수 있습니다.</span>
     </div>
     <div class="form-grid">
       <div class="f">
         <label>업체명 <span class="req">*</span></label>
-        <input type="text" id="p_name" placeholder="예) 서울드림의원" value="${esc(e?e.name:'')}">
+        <input type="text" id="p_name" placeholder="예) 서울드림의원" value="${esc(d.name||'')}">
       </div>
       <div class="f">
         <label>매월 입금일 <span class="req">*</span></label>
         <select id="p_day">
-          ${Array.from({length:31},(_,i)=>i+1).map(d=>`<option value="${d}" ${e&&String(e.dueDay)===String(d)?'selected':''}>매월 ${d}일</option>`).join('')}
-          <option value="EOM" ${e&&e.dueDay==='EOM'?'selected':''}>매월 말일</option>
+          ${Array.from({length:31},(_,i)=>i+1).map(n=>`<option value="${n}" ${String(d.day)===String(n)?'selected':''}>매월 ${n}일</option>`).join('')}
+          <option value="EOM" ${d.day==='EOM'?'selected':''}>매월 말일</option>
         </select>
         <div class="hint">해당 월에 없는 날짜(31일 등)는 자동으로 말일 처리됩니다.</div>
       </div>
       <div class="f">
         <label>입금 요청 금액 <span class="req">*</span></label>
-        <div class="money-in"><input type="text" id="p_amt" class="money" placeholder="0" value="${e?won(e.amount):''}"><span>원</span></div>
-        <div class="hint" id="p_amt_hint">${e?manwon(e.amount)+'원':'부가세 포함 금액 기준'}</div>
+        <div class="money-in"><input type="text" id="p_amt" class="money" placeholder="0" value="${esc(d.amt||'')}"><span>원</span></div>
+        <div class="hint" id="p_amt_hint">${d.amt ? manwon(parseMoney(d.amt))+'원' : '부가세 포함 금액 기준'}</div>
       </div>
       <div class="f">
         <label>담당자</label>
-        <input type="text" id="p_owner" placeholder="예) 홍길동" value="${esc(e?e.owner:'')}">
+        <input type="text" id="p_owner" placeholder="예) 홍길동" value="${esc(d.owner||'')}">
       </div>
 
       <div class="f">
         <label>결제 수단</label>
-        <select id="p_method">
-          ${['계좌이체','자동이체','카드결제','현금','기타'].map(v=>`<option ${e&&e.method===v?'selected':''}>${v}</option>`).join('')}
-        </select>
+        <select id="p_method">${['계좌이체','자동이체','카드결제','현금','기타'].map(v=>`<option ${d.method===v?'selected':''}>${v}</option>`).join('')}</select>
       </div>
       <div class="f">
         <label>세금계산서 발행일</label>
         <select id="p_tax">
           <option value="">선택 안 함</option>
-          <option value="말일" ${e&&e.taxDay==='말일'?'selected':''}>전월 말일 발행</option>
-          <option value="월초" ${e&&e.taxDay==='월초'?'selected':''}>당월 초 발행</option>
-          <option value="입금일" ${e&&e.taxDay==='입금일'?'selected':''}>입금일 당일 발행</option>
+          <option value="말일" ${d.tax==='말일'?'selected':''}>전월 말일 발행</option>
+          <option value="월초" ${d.tax==='월초'?'selected':''}>당월 초 발행</option>
+          <option value="입금일" ${d.tax==='입금일'?'selected':''}>입금일 당일 발행</option>
         </select>
       </div>
       <div class="f span2">
@@ -840,20 +778,34 @@ function renderPay(){
       </div>
       <div class="f span2">
         <label>메모 <span class="hint">(입금 조건, 지연 이력 등)</span></label>
-        <input type="text" id="p_memo" placeholder="예) 월초 계산서 발행 · 입금 지연 잦음 → D-3 사전 안내" value="${esc(e?e.memo:'')}">
+        <input type="text" id="p_memo" placeholder="예) 월초 계산서 발행 · 입금 지연 잦음 → D-3 사전 안내" value="${esc(d.memo||'')}">
       </div>
     </div>
     <div class="form-actions">
-      <div class="note">* 표시는 필수 입력 항목입니다. 등록 시 매월 자동으로 예정 건이 생성됩니다.</div>
-      ${e ? '<button class="btn" id="p_cancel">취소</button>' : ''}
-      <button class="btn primary" id="p_submit">${e?'수정 저장':'입금 일정 등록'}</button>
+      <div class="note">* 표시는 필수 입력 항목입니다. 등록하면 매월 예정 건이 자동 생성됩니다.</div>
+      <button class="btn primary" id="p_submit">업체 등록</button>
     </div>
-  </div>
+  </div>`;
+}
 
+/* ---------- 업체별 입금 현황 목록 ---------- */
+function renderPayList(){
+  let list = DB.schedules.slice();
+  if(payFilter.q) list = list.filter(s=>(s.name+s.owner+s.memo).toLowerCase().includes(payFilter.q.toLowerCase()));
+  if(payFilter.status!=='all') list = list.filter(s=> s.active && statusOf(s,cursor)===payFilter.status);
+  list.sort((a,b)=>{
+    if(payFilter.sort==='amount') return (b.amount||0)-(a.amount||0);
+    if(payFilter.sort==='name') return a.name.localeCompare(b.name,'ko');
+    return dueDateOf(a,cursor) - dueDateOf(b,cursor);
+  });
+  const s = summary(cursor);
+
+  document.getElementById('sec-paylist').innerHTML = `
+  <div class="sec-label">입금 현황</div>
   <div class="card">
     <div class="card-head">
-      <h2>입금 일정 목록</h2>
-      <span class="sub">${ymKey(cursor)} 기준 상태 · 총 ${list.length}건 / ${won(sum)}원</span>
+      <h2>💰 업체별 입금 현황</h2>
+      <span class="sub">${ymKey(cursor)} 기준 · 예정 ${won(s.planned)}원 · 완료 ${won(s.paid)}원 · 미입금 ${won(s.unpaid)}원</span>
       <div class="right">
         <div class="searchbox"><input type="text" id="p_q" placeholder="업체·담당자 검색" value="${esc(payFilter.q)}"></div>
         <select id="p_status" style="width:auto">
@@ -877,29 +829,34 @@ function renderPay(){
           <th>담당자</th><th>알림</th><th class="c">상태</th><th class="c" style="width:170px">관리</th>
         </tr></thead>
         <tbody>
-        ${list.length ? list.map(s=>{
-          if(payEdit === s.id) return editorRow(s);
-          const due = dueDateOf(s,cursor), st = statusOf(s,cursor), m = STATUS_META[st];
-          const rec = DB.payments[payKey(s,cursor)];
-          return `<tr style="${s.active?'':'opacity:.45'}">
-            <td class="co">${esc(s.name)}${s.active?'':' <span class="badge b-mute">중지</span>'}
-              <small>${esc(s.memo||'—')}</small></td>
-            <td class="num">${dueLabel(s)}<br><span style="color:var(--muted);font-size:11.5px">${fmtDate(due)}</span></td>
+        ${list.length ? list.map(sc=>{
+          if(payEdit === sc.id) return editorRow(sc);
+          const due = dueDateOf(sc,cursor), st = statusOf(sc,cursor), m = STATUS_META[st];
+          const rec = DB.payments[payKey(sc,cursor)];
+          return `<tr style="${sc.active?'':'opacity:.45'}">
+            <td class="co">${esc(sc.name)}${sc.active?'':' <span class="badge b-mute">중지</span>'}
+              <small>${esc(sc.memo||'—')}</small></td>
+            <td class="num">${dueLabel(sc)}<br><span style="color:var(--muted);font-size:11.5px">${fmtDate(due)}</span></td>
             <td class="c num" style="font-weight:700;color:${st==='late'?'var(--danger)':st==='soon'?'var(--warn)':'var(--muted)'}">${st==='paid'?'완료':ddayText(due)}</td>
-            <td class="r num" style="font-weight:700">${won(s.amount)}원<br><span style="color:var(--muted);font-weight:500;font-size:11.5px">${esc(s.method||'')}</span></td>
-            <td>${esc(s.owner||'—')}</td>
-            <td><span style="font-size:11.5px;color:var(--muted)">${(s.leads||[]).map(l=>l===0?'당일':'D-'+l).join(', ')||'—'}<br>${(s.channels||[]).join('/')||'—'}</span></td>
+            <td class="r num" style="font-weight:700">${won(sc.amount)}원<br><span style="color:var(--muted);font-weight:500;font-size:11.5px">${esc(sc.method||'')}</span></td>
+            <td>${esc(sc.owner||'—')}</td>
+            <td><span style="font-size:11.5px;color:var(--muted)">${(sc.leads||[]).map(l=>l===0?'당일':'D-'+l).join(', ')||'—'}<br>${(sc.channels||[]).join('/')||'—'}</span></td>
             <td class="c"><span class="badge ${m.cls}">${m.txt}</span>${rec?'<div style="font-size:11px;color:var(--muted);margin-top:4px">'+rec.paidAt+'</div>':''}</td>
             <td class="c">
               ${st==='paid'
-                ? '<button class="btn sm" data-unpay="'+s.id+'">입금취소</button>'
-                : '<button class="btn sm ok" data-pay="'+s.id+'">입금확인</button>'}
-              <button class="btn sm" data-edit="${s.id}">✏️ 수정</button>
-              <button class="btn sm danger" data-del="${s.id}">삭제</button>
+                ? '<button class="btn sm" data-unpay="'+sc.id+'">입금취소</button>'
+                : '<button class="btn sm ok" data-pay="'+sc.id+'">입금확인</button>'}
+              <button class="btn sm" data-edit="${sc.id}">✏️ 수정</button>
+              <button class="btn sm danger" data-del="${sc.id}">삭제</button>
             </td>
           </tr>`;
-        }).join('') : '<tr><td colspan="8" class="empty"><b>조건에 맞는 입금 일정이 없습니다</b>위 폼에서 업체를 등록하거나 필터를 변경해 보세요.</td></tr>'}
+        }).join('') : '<tr><td colspan="8" class="empty"><b>조건에 맞는 업체가 없습니다</b>위 업체 등록에서 추가하거나 필터를 변경해 보세요.</td></tr>'}
         </tbody>
+        <tfoot><tr>
+          <td colspan="3">활성 업체 ${DB.schedules.filter(x=>x.active).length}곳</td>
+          <td class="r num">${won(s.planned)}원</td>
+          <td colspan="4" class="c num">완료 ${won(s.paid)}원 · 미입금 ${won(s.unpaid)}원</td>
+        </tr></tfoot>
       </table>
     </div>
   </div>`;
@@ -1000,7 +957,7 @@ function openEditor(id){
   const s = DB.schedules.find(x=>x.id===id);
   payEdit = id;
   editForm = {...s, leads:(s.leads||[]).slice(), channels:(s.channels||[]).slice()};
-  view = 'pay'; renderAll();
+  renderPayList();
   const row = document.querySelector('.edit-row');
   if(row && row.scrollIntoView) row.scrollIntoView({block:'center', behavior:'smooth'});
 }
@@ -1009,23 +966,17 @@ function closeEditor(){ payEdit = null; editForm = null; }
 /* =====================================================================
    RENDER : 미팅 일정
    ===================================================================== */
-function renderMeet(){
+/* ---------- 미팅 등록/수정 폼 ---------- */
+function renderMeetForm(){
   const e = meetEdit ? DB.meetings.find(m=>m.id===meetEdit) : null;
   const t = today();
-  let list = DB.meetings.slice().sort((a,b)=>(b.date+(b.time||'')).localeCompare(a.date+(a.time||'')));
-  if(meetFilter.q){
-    const q = meetFilter.q.toLowerCase();
-    list = list.filter(m=>(m.company+' '+(m.agenda||'')+' '+(m.notes||'')+' '+[...(m.ours||[]),...(m.clients||[])].join(' ')).toLowerCase().includes(q));
-  }
-  if(meetFilter.scope==='upcoming') list = list.filter(m=>diffDays(new Date(m.date+'T00:00'),t)>=0).reverse();
-  if(meetFilter.scope==='past') list = list.filter(m=>diffDays(new Date(m.date+'T00:00'),t)<0);
-
   const companies = DB.schedules.map(s=>s.name);
 
-  document.getElementById('view-meet').innerHTML = `
+  document.getElementById('sec-meetform').innerHTML = `
+  <div class="sec-label">미팅 등록</div>
   <div class="card">
     <div class="card-head">
-      <h2>${e?'✏️ 미팅 수정':'➕ 미팅 일정 등록'}</h2>
+      <h2>${e?'✏️ 미팅 수정':'✍️ 미팅 등록'}</h2>
       <span class="sub">일시·참석자·회의록·액션 아이템을 함께 기록합니다. 미팅 전날 자동 알림이 발송됩니다.</span>
     </div>
     <div class="form-grid">
@@ -1050,7 +1001,7 @@ function renderMeet(){
       <div class="f">
         <label>진행 방식</label>
         <div class="seg" id="m_mode">
-          ${['대면','화상','전화'].map(v=>`<button data-mode="${v}" class="${(e?e.mode:form.mode||'대면')===v?'on':''}">${v}</button>`).join('')}
+          ${['대면','화상','전화'].map(v=>`<button data-mode="${v}" class="${(form.mode||'대면')===v?'on':''}">${v}</button>`).join('')}
         </div>
       </div>
       <div class="f span2">
@@ -1085,7 +1036,7 @@ function renderMeet(){
         <label>전날 알림</label>
         <div class="row" style="gap:10px">
           <div class="chk ${form.remind!==false?'on':''}" id="m_remind">${form.remind!==false?'☑':'☐'} 미팅 전날 알림 받기</div>
-          <select id="m_remind_at" style="width:auto">${['09:00','13:00','18:00','20:00'].map(v=>`<option ${((e&&e.remindAt)||form.remindAt||'18:00')===v?'selected':''}>${v}</option>`).join('')}</select>
+          <select id="m_remind_at" style="width:auto">${['09:00','13:00','18:00','20:00'].map(v=>`<option ${(form.remindAt||'18:00')===v?'selected':''}>${v}</option>`).join('')}</select>
           <span class="hint">전날 지정 시각에 담당자에게 알림</span>
         </div>
       </div>
@@ -1117,12 +1068,26 @@ function renderMeet(){
       ${e?'<button class="btn" id="m_cancel">취소</button>':''}
       <button class="btn primary" id="m_submit">${e?'수정 저장':'미팅 등록'}</button>
     </div>
-  </div>
+  </div>`;
+}
 
+/* ---------- 미팅 목록 ---------- */
+function renderMeetList(){
+  const t = today();
+  let list = DB.meetings.slice().sort((a,b)=>(b.date+(b.time||'')).localeCompare(a.date+(a.time||'')));
+  if(meetFilter.q){
+    const q = meetFilter.q.toLowerCase();
+    list = list.filter(m=>(m.company+' '+(m.agenda||'')+' '+(m.notes||'')+' '+[...(m.ours||[]),...(m.clients||[])].join(' ')).toLowerCase().includes(q));
+  }
+  if(meetFilter.scope==='upcoming') list = list.filter(m=>diffDays(new Date(m.date+'T00:00'),t)>=0).reverse();
+  if(meetFilter.scope==='past') list = list.filter(m=>diffDays(new Date(m.date+'T00:00'),t)<0);
+
+  document.getElementById('sec-meetlist').innerHTML = `
+  <div class="sec-label">미팅 목록</div>
   <div class="card">
     <div class="card-head">
-      <h2>미팅 목록</h2>
-      <span class="sub">총 ${DB.meetings.length}건</span>
+      <h2>🗓 미팅 목록</h2>
+      <span class="sub">전체 ${DB.meetings.length}건 · 표시 ${list.length}건</span>
       <div class="right">
         <div class="searchbox"><input type="text" id="mt_q" placeholder="업체·안건·참석자 검색" value="${esc(meetFilter.q)}"></div>
         <div class="seg" id="mt_scope" style="width:230px">
@@ -1131,7 +1096,7 @@ function renderMeet(){
       </div>
     </div>
     ${list.length ? list.map(m=>meetingCard(m,t)).join('')
-      : '<div class="empty"><b>표시할 미팅이 없습니다</b>위 폼에서 미팅 일정을 등록해 주세요.</div>'}
+      : '<div class="empty"><b>표시할 미팅이 없습니다</b>위 미팅 등록에서 일정을 추가해 주세요.</div>'}
   </div>`;
 }
 
@@ -1195,7 +1160,7 @@ function openModal(kind, key){
   closeEditor();                                   // 목록 인라인 편집과 동시 사용 방지
   modal = {kind, id:key, date:key, edit:false};
   mForm = null;
-  if(wasEditing) renderPay();
+  if(wasEditing) renderPayList();
   renderModal();
 }
 function closeModal(){ modal = null; mForm = null; renderModal(); }
@@ -1482,12 +1447,23 @@ function renderAlerts(){
    ===================================================================== */
 function renderAll(){
   document.getElementById('mLabel').textContent = cursor.getFullYear()+'년 '+(cursor.getMonth()+1)+'월';
-  document.getElementById('tabPayCnt').textContent = DB.schedules.filter(s=>s.active).length;
-  document.getElementById('tabMeetCnt').textContent = DB.meetings.filter(m=>diffDays(new Date(m.date+'T00:00'),today())>=0).length;
-  renderDash(); renderPay(); renderMeet(); renderAlerts(); renderModal();
-  ['dash','pay','meet'].forEach(v=>document.getElementById('view-'+v).style.display = (v===view?'':'none'));
-  document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active', b.dataset.view===view));
+  document.getElementById('navPayCnt').textContent = DB.schedules.filter(s=>s.active).length;
+  document.getElementById('navMeetCnt').textContent = DB.meetings.filter(m=>diffDays(new Date(m.date+'T00:00'),today())>=0).length;
+  renderSummary(); renderCompanyForm(); renderPayList(); renderMeetForm(); renderMeetList(); renderAlerts(); renderModal();
 }
+/* 섹션 이동 (탭 대신) */
+function jumpTo(id){
+  const el = document.getElementById(id);
+  if(el && el.scrollIntoView) el.scrollIntoView({behavior:'smooth', block:'start'});
+}
+/* 등록 폼에 입력하던 값을 보존 (알림 체크 토글 시 초기화 방지) */
+function syncCompanyInputs(){
+  const g = id => document.getElementById(id);
+  if(!g('p_name')) return;
+  form.draft = {name:g('p_name').value, day:g('p_day').value, amt:g('p_amt').value,
+    owner:g('p_owner').value, method:g('p_method').value, tax:g('p_tax').value, memo:g('p_memo').value};
+}
+
 function toast(msg){
   const t = document.getElementById('toast');
   t.textContent = msg; t.classList.add('show');
@@ -1499,7 +1475,6 @@ function parseMoney(v){ return Number(String(v).replace(/[^0-9]/g,'')) || 0; }
 document.getElementById('mPrev').onclick = ()=>{ cursor = new Date(cursor.getFullYear(), cursor.getMonth()-1, 1); renderAll(); };
 document.getElementById('mNext').onclick = ()=>{ cursor = new Date(cursor.getFullYear(), cursor.getMonth()+1, 1); renderAll(); };
 document.getElementById('mToday').onclick = ()=>{ cursor = startOfMonth(new Date()); renderAll(); };
-document.querySelectorAll('.tab').forEach(b=> b.onclick = ()=>{ view = b.dataset.view; renderAll(); });
 /* 테마: 지정값이 없으면 보는 사람의 시스템 설정을 따른다 */
 function effectiveTheme(){
   const t = document.documentElement.dataset.theme;
@@ -1526,7 +1501,7 @@ document.getElementById('modalRoot').addEventListener('click', e=>{
 document.addEventListener('keydown', e=>{
   if(e.key === 'Escape'){
     if(modal){ closeModal(); return; }
-    if(payEdit){ closeEditor(); renderPay(); }
+    if(payEdit){ closeEditor(); renderPayList(); }
   }
 });
 document.getElementById('exportBtn').onclick = ()=>{
@@ -1539,7 +1514,7 @@ document.getElementById('exportBtn').onclick = ()=>{
 
 /* 전역 클릭 위임 */
 document.addEventListener('click', e=>{
-  const el = e.target.closest('[data-goto],[data-pay],[data-unpay],[data-edit],[data-del],[data-lead],[data-chan],[data-esave],[data-ecancel],[data-elead],[data-echan],[data-eactive],[data-ev],[data-day],[data-mclose],[data-medit],[data-mcancel],[data-msave],[data-mdel],[data-mtcopy2],[data-xlead],[data-xchan],[data-xactive],[data-xremind],[data-toggle],[data-mt-edit],[data-mt-del],[data-mt-copy],[data-rm-our],[data-rm-cli],[data-rm-item],[data-mode],[data-scope],#openBell2,#p_submit,#p_cancel,#m_submit,#m_cancel,#m_add_item,#m_remind');
+  const el = e.target.closest('[data-jump],[data-pay],[data-unpay],[data-edit],[data-del],[data-lead],[data-chan],[data-esave],[data-ecancel],[data-elead],[data-echan],[data-eactive],[data-ev],[data-day],[data-mclose],[data-medit],[data-mcancel],[data-msave],[data-mdel],[data-mtcopy2],[data-xlead],[data-xchan],[data-xactive],[data-xremind],[data-toggle],[data-mt-edit],[data-mt-del],[data-mt-copy],[data-rm-our],[data-rm-cli],[data-rm-item],[data-mode],[data-scope],#openBell2,#p_submit,#p_cancel,#m_submit,#m_cancel,#m_add_item,#m_remind');
   if(!el) return;
 
   // 캘린더/요약 항목 클릭 → 상세 모달
@@ -1582,7 +1557,7 @@ document.addEventListener('click', e=>{
   if(el.dataset.xremind){ syncModal(); mForm.remind = !(mForm.remind !== false); renderModal(); return; }
 
   // 탭 이동
-  if(el.dataset.goto){ view = el.dataset.goto; if(el.dataset.status) payFilter.status = el.dataset.status; renderAll(); return; }
+  if(el.dataset.jump){ if(el.dataset.status){ payFilter.status = el.dataset.status; renderPayList(); } jumpTo(el.dataset.jump); return; }
   if(el.id === 'openBell2'){ document.getElementById('alertPanel').classList.add('open'); return; }
 
   // 입금 확인 / 취소
@@ -1606,18 +1581,18 @@ document.addEventListener('click', e=>{
       closeEditor(); save(); renderAll(); toast('삭제되었습니다.');
     } return;
   }
-  if(el.dataset.ecancel){ closeEditor(); renderPay(); return; }
+  if(el.dataset.ecancel){ closeEditor(); renderPayList(); return; }
   if(el.dataset.elead !== undefined){
     syncEdit(); const v = Number(el.dataset.elead), i = editForm.leads.indexOf(v);
     i>-1 ? editForm.leads.splice(i,1) : editForm.leads.push(v);
-    renderPay(); return;
+    renderPayList(); return;
   }
   if(el.dataset.echan){
     syncEdit(); const v = el.dataset.echan, i = editForm.channels.indexOf(v);
     i>-1 ? editForm.channels.splice(i,1) : editForm.channels.push(v);
-    renderPay(); return;
+    renderPayList(); return;
   }
-  if(el.dataset.eactive){ syncEdit(); editForm.active = el.dataset.eactive === '1'; renderPay(); return; }
+  if(el.dataset.eactive){ syncEdit(); editForm.active = el.dataset.eactive === '1'; renderPayList(); return; }
   if(el.dataset.esave){
     syncEdit();
     if(!editForm.name) return toast('업체명을 입력해 주세요.');
@@ -1631,19 +1606,20 @@ document.addEventListener('click', e=>{
 
   // 알림 시점 / 채널 체크
   if(el.dataset.lead !== undefined && el.dataset.lead !== ''){
+    syncCompanyInputs();
     const v = Number(el.dataset.lead), i = form.leads.indexOf(v);
     i>-1 ? form.leads.splice(i,1) : form.leads.push(v);
-    renderPay(); return;
+    renderCompanyForm(); return;
   }
   if(el.dataset.chan){
+    syncCompanyInputs();
     const v = el.dataset.chan, i = form.channels.indexOf(v);
     i>-1 ? form.channels.splice(i,1) : form.channels.push(v);
-    renderPay(); return;
+    renderCompanyForm(); return;
   }
 
   // 입금 폼 제출/취소
   if(el.id === 'p_submit'){ submitPay(); return; }
-  if(el.id === 'p_cancel'){ payEdit=null; form.leads=[3,1,0]; form.channels=['사내알림']; renderPay(); return; }
 
   // 미팅 카드 토글
   if(el.dataset.toggle){ el.closest('.mtg').classList.toggle('open'); return; }
@@ -1652,7 +1628,7 @@ document.addEventListener('click', e=>{
     meetEdit = m.id;
     form.ours = (m.ours||[]).slice(); form.clients = (m.clients||[]).slice();
     form.items = (m.items||[]).map(i=>({...i})); form.mode = m.mode; form.remind = m.remind!==false; form.remindAt = m.remindAt;
-    view='meet'; renderAll(); window.scrollTo({top:0, behavior:'smooth'}); return;
+    renderMeetForm(); jumpTo('sec-meetform'); return;
   }
   if(el.dataset.mtDel){
     if(confirm('이 미팅 기록을 삭제할까요?')){
@@ -1663,15 +1639,15 @@ document.addEventListener('click', e=>{
   if(el.dataset.mtCopy){ copyMinutes(el.dataset.mtCopy); return; }
 
   // 참석자 chip 삭제
-  if(el.dataset.rmOur !== undefined){ form.ours.splice(Number(el.dataset.rmOur),1); renderMeet(); return; }
-  if(el.dataset.rmCli !== undefined){ form.clients.splice(Number(el.dataset.rmCli),1); renderMeet(); return; }
-  if(el.dataset.rmItem !== undefined){ syncItemInputs(); form.items.splice(Number(el.dataset.rmItem),1); renderMeet(); return; }
-  if(el.id === 'm_add_item'){ syncItemInputs(); form.items.push({task:'',owner:'',due:'',done:false}); renderMeet(); return; }
-  if(el.dataset.mode){ form.mode = el.dataset.mode; renderMeet(); return; }
-  if(el.id === 'm_remind'){ form.remind = !(form.remind!==false); renderMeet(); return; }
-  if(el.dataset.scope){ meetFilter.scope = el.dataset.scope; renderMeet(); return; }
+  if(el.dataset.rmOur !== undefined){ form.ours.splice(Number(el.dataset.rmOur),1); renderMeetForm(); return; }
+  if(el.dataset.rmCli !== undefined){ form.clients.splice(Number(el.dataset.rmCli),1); renderMeetForm(); return; }
+  if(el.dataset.rmItem !== undefined){ syncItemInputs(); form.items.splice(Number(el.dataset.rmItem),1); renderMeetForm(); return; }
+  if(el.id === 'm_add_item'){ syncItemInputs(); form.items.push({task:'',owner:'',due:'',done:false}); renderMeetForm(); return; }
+  if(el.dataset.mode){ form.mode = el.dataset.mode; renderMeetForm(); return; }
+  if(el.id === 'm_remind'){ form.remind = !(form.remind!==false); renderMeetForm(); return; }
+  if(el.dataset.scope){ meetFilter.scope = el.dataset.scope; renderMeetList(); return; }
   if(el.id === 'm_submit'){ submitMeet(); return; }
-  if(el.id === 'm_cancel'){ meetEdit=null; resetMeetForm(); renderMeet(); return; }
+  if(el.id === 'm_cancel'){ meetEdit=null; resetMeetForm(); renderMeetForm(); return; }
 });
 
 /* 입력 이벤트 */
@@ -1683,15 +1659,15 @@ document.addEventListener('input', e=>{
     const h = document.getElementById('p_amt_hint');
     if(h) h.textContent = n ? manwon(n)+'원' : '부가세 포함 금액 기준';
   }
-  if(t.id === 'p_q'){ payFilter.q = t.value; const p=t.selectionStart; renderPay();
+  if(t.id === 'p_q'){ payFilter.q = t.value; const p=t.selectionStart; renderPayList();
     const el=document.getElementById('p_q'); el.focus(); el.setSelectionRange(p,p); }
-  if(t.id === 'mt_q'){ meetFilter.q = t.value; const p=t.selectionStart; renderMeet();
+  if(t.id === 'mt_q'){ meetFilter.q = t.value; const p=t.selectionStart; renderMeetList();
     const el=document.getElementById('mt_q'); el.focus(); el.setSelectionRange(p,p); }
 });
 document.addEventListener('change', e=>{
   const t = e.target;
-  if(t.id === 'p_status'){ payFilter.status = t.value; renderPay(); }
-  if(t.id === 'p_sort'){ payFilter.sort = t.value; renderPay(); }
+  if(t.id === 'p_status'){ payFilter.status = t.value; renderPayList(); }
+  if(t.id === 'p_sort'){ payFilter.sort = t.value; renderPayList(); }
   if(t.dataset && t.dataset.itemDone !== undefined){
     const m = DB.meetings.find(x=>x.id===t.dataset.itemDone);
     const list = (m.items||[]).filter(i=>i.task);      // 화면에 보이는 목록 기준
@@ -1700,7 +1676,7 @@ document.addEventListener('change', e=>{
     save();
     const card = t.closest('.mtg');
     const wasOpen = card ? card.classList.contains('open') : false;
-    renderMeet(); renderModal();
+    renderMeetList(); renderModal();
     if(wasOpen){
       const c = document.querySelector('[data-mtg="'+m.id+'"]');
       if(c) c.classList.add('open');
@@ -1713,7 +1689,7 @@ document.addEventListener('keydown', e=>{
   if(t.dataset && t.dataset.chip && e.key === 'Enter'){
     e.preventDefault();
     const v = t.value.trim(); if(!v) return;
-    form[t.dataset.chip].push(v); t.value=''; renderMeet();
+    form[t.dataset.chip].push(v); t.value=''; renderMeetForm();
     const box = document.getElementById(t.dataset.chip==='ours'?'m_ours':'m_clients');
     box.querySelector('input').focus();
   }
@@ -1735,7 +1711,7 @@ function submitPay(){
   if(DB.schedules.some(x=>x.name === name))
     if(!confirm('이미 같은 이름의 업체가 있습니다. 그래도 등록할까요?')) return;
   DB.schedules.push({id:uid(), ...data});
-  form.leads = [3,1,0]; form.channels = ['사내알림'];
+  form.leads = [3,1,0]; form.channels = ['사내알림']; form.draft = null;
   save(); renderAll();
   toast(name + ' 입금 일정이 등록되었습니다. (수정은 목록의 ✏️ 버튼)');
 }
