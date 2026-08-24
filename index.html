@@ -413,13 +413,12 @@ tr.editing td{box-shadow:inset 0 0 0 1px var(--accent-line)}
 
   <nav class="secnav">
     <a href="#sec-summary">📅 이번 달 현황</a>
-    <a href="#sec-meetlist">🗓 미팅 목록 <span class="cnt" id="navMeetCnt">0</span></a>
+    <button type="button" data-list="meet">🗓 미팅 목록 <span class="cnt" id="navMeetCnt">0</span></button>
     <a href="#sec-paylist">💰 입금 현황 <span class="cnt" id="navPayCnt">0</span></a>
   </nav>
 
   <div id="bannerSlot"></div>
   <section id="sec-summary"></section>
-  <section id="sec-meetlist"></section>
   <section id="sec-paylist"></section>
 </div>
 
@@ -648,7 +647,7 @@ function renderSummary(){
         <div class="card-head">
           <h2>다가오는 미팅</h2>
           <div class="right">
-            <button class="btn sm" data-jump="sec-meetlist">전체 목록 ↓</button>
+            <button class="btn sm" data-list="meet">전체 목록 보기</button>
             <button class="btn sm" data-new="meet">＋ 미팅 등록</button>
           </div>
         </div>
@@ -886,8 +885,8 @@ function closeEditor(){ payEdit = null; editForm = null; }
 /* =====================================================================
    RENDER : 미팅 일정
    ===================================================================== */
-/* ---------- 미팅 목록 (다가오는 미팅 아래 섹션) ---------- */
-function renderMeetList(){
+/* ---------- 미팅 전체 목록 (팝업) ---------- */
+function meetListModal(){
   const t = today();
   let list = DB.meetings.slice().sort((a,b)=>(b.date+(b.time||'')).localeCompare(a.date+(a.time||'')));
   if(meetFilter.q){
@@ -897,22 +896,27 @@ function renderMeetList(){
   if(meetFilter.scope==='upcoming') list = list.filter(m=>diffDays(new Date(m.date+'T00:00'),t)>=0).reverse();
   if(meetFilter.scope==='past') list = list.filter(m=>diffDays(new Date(m.date+'T00:00'),t)<0);
 
-  document.getElementById('sec-meetlist').innerHTML = `
-  <div class="sec-label">미팅 목록</div>
-  <div class="card">
-    <div class="card-head">
-      <h2>🗓 미팅 전체 목록</h2>
-      <span class="sub">전체 ${DB.meetings.length}건 · 표시 ${list.length}건 · 카드를 클릭하면 회의록이 펼쳐집니다</span>
-      <div class="right">
-        <button class="btn sm primary" data-new="meet">＋ 미팅 등록</button>
-        <div class="searchbox"><input type="text" id="mt_q" placeholder="업체·안건·참석자 검색" value="${esc(meetFilter.q)}"></div>
-        <div class="seg" id="mt_scope" style="width:210px">
+  return `<div class="modal wide">
+    <div class="modal-head">
+      <div class="ttl">🗓 미팅 전체 목록</div>
+      <span style="color:var(--muted);font-size:12px">전체 ${DB.meetings.length}건 · 표시 ${list.length}건</span>
+      <button class="x" data-mclose="1" title="닫기">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="row" style="margin-bottom:14px">
+        <div class="searchbox" style="flex:1"><input type="text" id="mt_q" placeholder="업체·안건·참석자 검색" value="${esc(meetFilter.q)}"></div>
+        <div class="seg" style="width:210px">
           ${[['upcoming','예정'],['past','지난'],['all','전체']].map(([v,t2])=>`<button data-scope="${v}" class="${meetFilter.scope===v?'on':''}">${t2}</button>`).join('')}
         </div>
       </div>
+      ${list.length ? list.map(m=>meetingCard(m,t)).join('')
+        : '<div class="empty"><b>표시할 미팅이 없습니다</b>＋ 미팅 등록 버튼으로 일정을 추가해 주세요.</div>'}
     </div>
-    ${list.length ? list.map(m=>meetingCard(m,t)).join('')
-      : '<div class="empty"><b>표시할 미팅이 없습니다</b>＋ 미팅 등록 버튼으로 일정을 추가해 주세요.</div>'}
+    <div class="modal-foot">
+      <div class="note">카드를 클릭하면 회의록과 액션 아이템이 펼쳐집니다.</div>
+      <button class="btn sm" data-mclose="1">닫기</button>
+      <button class="btn sm primary" data-new="meet">＋ 미팅 등록</button>
+    </div>
   </div>`;
 }
 
@@ -994,6 +998,7 @@ function renderModal(){
   if(modal.kind === 'day')  html = modalDay();
   if(modal.kind === 'newpay')  html = payFormModal();
   if(modal.kind === 'newmeet') html = meetFormModal();
+  if(modal.kind === 'meetlist') html = meetListModal();
   if(!html){ modal = null; root.classList.remove('open'); root.innerHTML=''; return; }
   root.innerHTML = html; root.classList.add('open');
 }
@@ -1465,7 +1470,7 @@ function renderAll(){
   document.getElementById('mLabel').textContent = cursor.getFullYear()+'년 '+(cursor.getMonth()+1)+'월';
   document.getElementById('navPayCnt').textContent = DB.schedules.filter(s=>s.active).length;
   document.getElementById('navMeetCnt').textContent = DB.meetings.filter(m=>diffDays(new Date(m.date+'T00:00'),today())>=0).length;
-  renderSummary(); renderMeetList(); renderPayList(); renderAlerts(); renderModal();
+  renderSummary(); renderPayList(); renderAlerts(); renderModal();
 }
 /* 섹션 이동 (탭 대신) */
 function jumpTo(id){
@@ -1530,7 +1535,7 @@ document.getElementById('exportBtn').onclick = ()=>{
 
 /* 전역 클릭 위임 */
 document.addEventListener('click', e=>{
-  const el = e.target.closest('[data-jump],[data-pay],[data-unpay],[data-edit],[data-del],[data-lead],[data-chan],[data-esave],[data-ecancel],[data-elead],[data-echan],[data-eactive],[data-ev],[data-day],[data-new],[data-mclose],[data-medit],[data-mcancel],[data-msave],[data-mdel],[data-mtcopy2],[data-smscopy],[data-xlead],[data-xchan],[data-xactive],[data-xremind],[data-toggle],[data-mt-edit],[data-mt-del],[data-mt-copy],[data-rm-our],[data-rm-cli],[data-rm-item],[data-mode],[data-scope],#openBell2,#p_submit,#p_cancel,#m_submit,#m_cancel,#m_add_item,#m_remind');
+  const el = e.target.closest('[data-jump],[data-pay],[data-unpay],[data-edit],[data-del],[data-lead],[data-chan],[data-esave],[data-ecancel],[data-elead],[data-echan],[data-eactive],[data-ev],[data-day],[data-new],[data-list],[data-mclose],[data-medit],[data-mcancel],[data-msave],[data-mdel],[data-mtcopy2],[data-smscopy],[data-xlead],[data-xchan],[data-xactive],[data-xremind],[data-toggle],[data-mt-edit],[data-mt-del],[data-mt-copy],[data-rm-our],[data-rm-cli],[data-rm-item],[data-mode],[data-scope],#openBell2,#p_submit,#p_cancel,#m_submit,#m_cancel,#m_add_item,#m_remind');
   if(!el) return;
 
   // 캘린더/요약 항목 클릭 → 상세 모달
@@ -1541,6 +1546,7 @@ document.addEventListener('click', e=>{
   if(el.dataset.day){ openModal('day', el.dataset.day); return; }
   if(el.dataset.new === 'pay'){ openPayForm(); return; }
   if(el.dataset.new === 'meet'){ openMeetForm(null); return; }
+  if(el.dataset.list === 'meet'){ modal = {kind:'meetlist'}; mForm = null; renderModal(); return; }
   if(el.dataset.mclose){ closeModal(); return; }
   if(el.dataset.medit){
     if(modal.kind === 'meet'){ openMeetForm(modal.id); return; }
@@ -1658,7 +1664,7 @@ document.addEventListener('click', e=>{
   if(el.id === 'm_add_item'){ syncItemInputs(); form.items.push({task:'',owner:'',due:'',done:false}); renderModal(); return; }
   if(el.dataset.mode){ form.mode = el.dataset.mode; renderModal(); return; }
   if(el.id === 'm_remind'){ form.remind = !(form.remind!==false); renderModal(); return; }
-  if(el.dataset.scope){ meetFilter.scope = el.dataset.scope; renderMeetList(); return; }
+  if(el.dataset.scope){ meetFilter.scope = el.dataset.scope; renderModal(); return; }
   if(el.id === 'm_submit'){ submitMeet(); return; }
   if(el.id === 'm_cancel'){ meetEdit=null; resetMeetForm(); renderModal(); return; }
 });
@@ -1674,7 +1680,7 @@ document.addEventListener('input', e=>{
   }
   if(t.id === 'p_q'){ payFilter.q = t.value; const p=t.selectionStart; renderPayList();
     const el=document.getElementById('p_q'); el.focus(); el.setSelectionRange(p,p); }
-  if(t.id === 'mt_q'){ meetFilter.q = t.value; const p=t.selectionStart; renderMeetList();
+  if(t.id === 'mt_q'){ meetFilter.q = t.value; const p=t.selectionStart; renderModal();
     const el=document.getElementById('mt_q'); el.focus(); el.setSelectionRange(p,p); }
 });
 document.addEventListener('change', e=>{
@@ -1689,7 +1695,7 @@ document.addEventListener('change', e=>{
     save();
     const card = t.closest('.mtg');
     const wasOpen = card ? card.classList.contains('open') : false;
-    renderMeetList(); renderModal();
+    renderModal();
     if(wasOpen){
       const c = document.querySelector('[data-mtg="'+m.id+'"]');
       if(c) c.classList.add('open');
