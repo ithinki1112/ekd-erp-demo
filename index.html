@@ -422,6 +422,8 @@ tr.editing td{box-shadow:inset 0 0 0 1px var(--accent-line)}
    ===================================================================== */
 
 const KEY = 'ekd_erp_addon_v1';
+/* 입금 받을 회사 계좌 (입금 요청 문자에 사용) */
+const PAYEE = { company:'주식회사 이케이디랩스', bank:'기업은행', account:'000-000000-00-000' };
 const WEEK = ['일','월','화','수','목','금','토'];
 
 /* ---------- 기본 시드 데이터 (현재 ERP 화면의 고정 입금일 메모 기준) ---------- */
@@ -1013,6 +1015,7 @@ function modalPay(){
                       : '<button class="btn sm ok" data-pay="'+s.id+'">입금 확인</button>'}
         <button class="btn sm danger" data-mdel="pay|${s.id}">삭제</button>
         <button class="btn sm primary" data-medit="1">✏️ 수정</button>
+        <button class="btn sm ok" data-smscopy="${s.id}">💬 입금 요청 문자 복사</button>
       </div></div>`;
   }
 
@@ -1510,7 +1513,7 @@ document.getElementById('exportBtn').onclick = ()=>{
 
 /* 전역 클릭 위임 */
 document.addEventListener('click', e=>{
-  const el = e.target.closest('[data-jump],[data-pay],[data-unpay],[data-edit],[data-del],[data-lead],[data-chan],[data-esave],[data-ecancel],[data-elead],[data-echan],[data-eactive],[data-ev],[data-day],[data-new],[data-mclose],[data-medit],[data-mcancel],[data-msave],[data-mdel],[data-mtcopy2],[data-xlead],[data-xchan],[data-xactive],[data-xremind],[data-toggle],[data-mt-edit],[data-mt-del],[data-mt-copy],[data-rm-our],[data-rm-cli],[data-rm-item],[data-mode],[data-scope],#openBell2,#p_submit,#p_cancel,#m_submit,#m_cancel,#m_add_item,#m_remind');
+  const el = e.target.closest('[data-jump],[data-pay],[data-unpay],[data-edit],[data-del],[data-lead],[data-chan],[data-esave],[data-ecancel],[data-elead],[data-echan],[data-eactive],[data-ev],[data-day],[data-new],[data-mclose],[data-medit],[data-mcancel],[data-msave],[data-mdel],[data-mtcopy2],[data-smscopy],[data-xlead],[data-xchan],[data-xactive],[data-xremind],[data-toggle],[data-mt-edit],[data-mt-del],[data-mt-copy],[data-rm-our],[data-rm-cli],[data-rm-item],[data-mode],[data-scope],#openBell2,#p_submit,#p_cancel,#m_submit,#m_cancel,#m_add_item,#m_remind');
   if(!el) return;
 
   // 캘린더/요약 항목 클릭 → 상세 모달
@@ -1543,6 +1546,7 @@ document.addEventListener('click', e=>{
     modal = null; mForm = null; save(); renderAll(); toast('삭제되었습니다.'); return;
   }
   if(el.dataset.mtcopy2){ copyMinutes(el.dataset.mtcopy2); return; }
+  if(el.dataset.smscopy){ copyPaymentMessage(el.dataset.smscopy); return; }
   if(el.dataset.xlead !== undefined){
     syncModal(); const v = Number(el.dataset.xlead), i = (mForm.leads=mForm.leads||[]).indexOf(v);
     i>-1 ? mForm.leads.splice(i,1) : mForm.leads.push(v); renderModal(); return;
@@ -1744,6 +1748,49 @@ function submitMeet(){
     toast(company + ' 미팅이 등록되었습니다. 전날 ' + data.remindAt + ' 알림 예약됨.');
   }
   resetMeetForm(); modal = null; mForm = null; save(); renderAll();
+}
+
+/* 카카오톡에 바로 붙여넣을 입금 요청 문구 */
+const TAX_TXT = {'말일':'전월 말일', '월초':'당월 초', '입금일':'입금일 당일'};
+function paymentMessage(s, base){
+  const due = dueDateOf(s, base);
+  const late = diffDays(due, today()) < 0 && !isPaid(s, base);
+  const ym = base.getFullYear() + "년 " + (base.getMonth()+1) + "월";
+  const dueTxt = due.getFullYear() + "년 " + (due.getMonth()+1) + "월 " + due.getDate() + "일(" + WEEK[due.getDay()] + ")";
+  const lines = [];
+  lines.push("안녕하세요, " + PAYEE.company + "입니다.");
+  lines.push(late
+    ? ym + " 대금 입금 예정일이 지났으나 아직 확인되지 않아 안내드립니다."
+    : ym + " 대금 입금 요청드립니다.");
+  lines.push("");
+  lines.push("▶업체명");
+  lines.push(s.name);
+  lines.push("");
+  lines.push("▶입금 요청 금액");
+  lines.push(won(s.amount) + "원");
+  lines.push("");
+  lines.push(late ? "▶입금 예정일 (지남)" : "▶입금 예정일");
+  lines.push(dueTxt);
+  lines.push("");
+  lines.push("▶계좌번호");
+  lines.push(PAYEE.bank);
+  lines.push(PAYEE.account);
+  lines.push(PAYEE.company);
+  if(s.taxDay && TAX_TXT[s.taxDay]){
+    lines.push("");
+    lines.push("세금계산서는 " + TAX_TXT[s.taxDay] + " 발행됩니다.");
+  }
+  lines.push("");
+  lines.push("확인 후 회신 부탁드립니다. 감사합니다.");
+  if(s.owner) lines.push("(담당: " + s.owner + ")");
+  return lines.join("\n");
+}
+function copyPaymentMessage(id){
+  const s = DB.schedules.find(x=>x.id===id);
+  if(!s) return;
+  const text = paymentMessage(s, cursor);
+  const done = () => toast(s.name + " 입금 요청 문자를 복사했습니다. 카카오톡에 붙여넣기 하세요.");
+  navigator.clipboard ? navigator.clipboard.writeText(text).then(done, ()=>fallbackCopy(text)) : fallbackCopy(text);
 }
 
 function copyMinutes(id){
