@@ -977,6 +977,7 @@ function renderModal(){
   if(modal.kind === 'newpay')  html = payFormModal();
   if(modal.kind === 'newmeet') html = meetFormModal();
   if(modal.kind === 'meetlist') html = meetListModal();
+  if(modal.kind === 'msg')      html = msgModal();
   if(!html){ modal = null; root.classList.remove('open'); root.innerHTML=''; return; }
   root.innerHTML = html; root.classList.add('open');
 }
@@ -1015,7 +1016,7 @@ function modalPay(){
                       : '<button class="btn sm ok" data-pay="'+s.id+'">입금 확인</button>'}
         <button class="btn sm danger" data-mdel="pay|${s.id}">삭제</button>
         <button class="btn sm primary" data-medit="1">✏️ 수정</button>
-        <button class="btn sm ok" data-smscopy="${s.id}">💬 입금 요청 문자 복사</button>
+        <button class="btn sm ok" data-smscopy="${s.id}">💬 입금 요청 문자</button>
       </div></div>`;
   }
 
@@ -1511,7 +1512,7 @@ document.getElementById('exportBtn').onclick = ()=>{
 
 /* 전역 클릭 위임 */
 document.addEventListener('click', e=>{
-  const el = e.target.closest('[data-jump],[data-pay],[data-unpay],[data-edit],[data-del],[data-lead],[data-chan],[data-esave],[data-ecancel],[data-elead],[data-echan],[data-eactive],[data-ev],[data-day],[data-new],[data-list],[data-mclose],[data-medit],[data-mcancel],[data-msave],[data-mdel],[data-mtcopy2],[data-smscopy],[data-xlead],[data-xchan],[data-xactive],[data-xremind],[data-toggle],[data-mt-edit],[data-mt-del],[data-mt-copy],[data-rm-our],[data-rm-cli],[data-rm-item],[data-mode],[data-scope],#openBell2,#p_submit,#p_cancel,#m_submit,#m_cancel,#m_add_item,#m_remind');
+  const el = e.target.closest('[data-jump],[data-pay],[data-unpay],[data-edit],[data-del],[data-lead],[data-chan],[data-esave],[data-ecancel],[data-elead],[data-echan],[data-eactive],[data-ev],[data-day],[data-new],[data-list],[data-mclose],[data-medit],[data-mcancel],[data-msave],[data-mdel],[data-mtcopy2],[data-smscopy],[data-msgcopy],[data-msgreset],[data-msgtpl],[data-tplsave],[data-tpldefault],[data-xlead],[data-xchan],[data-xactive],[data-xremind],[data-toggle],[data-mt-edit],[data-mt-del],[data-mt-copy],[data-rm-our],[data-rm-cli],[data-rm-item],[data-mode],[data-scope],#openBell2,#p_submit,#p_cancel,#m_submit,#m_cancel,#m_add_item,#m_remind');
   if(!el) return;
 
   // 캘린더/요약 항목 클릭 → 상세 모달
@@ -1545,7 +1546,31 @@ document.addEventListener('click', e=>{
     modal = null; mForm = null; save(); renderAll(); toast('삭제되었습니다.'); return;
   }
   if(el.dataset.mtcopy2){ copyMinutes(el.dataset.mtcopy2); return; }
-  if(el.dataset.smscopy){ copyPaymentMessage(el.dataset.smscopy); return; }
+  if(el.dataset.smscopy){ openMsgModal(el.dataset.smscopy); return; }
+  if(el.dataset.msgreset){
+    syncMsg();
+    mForm.text = paymentMessage(DB.schedules.find(x=>x.id===modal.id), cursor);
+    renderModal(); toast('기본 문구로 되돌렸습니다.'); return;
+  }
+  if(el.dataset.msgtpl){ syncMsg(); mForm.tplOpen = !mForm.tplOpen; renderModal(); return; }
+  if(el.dataset.tplsave){
+    syncMsg(); DB.template = mForm.template; save();
+    mForm.text = paymentMessage(DB.schedules.find(x=>x.id===modal.id), cursor);
+    renderModal(); toast('문구 양식을 저장했습니다. 모든 업체에 적용됩니다.'); return;
+  }
+  if(el.dataset.tpldefault){
+    syncMsg(); DB.template = DEFAULT_MSG_TEMPLATE; mForm.template = DEFAULT_MSG_TEMPLATE; save();
+    mForm.text = paymentMessage(DB.schedules.find(x=>x.id===modal.id), cursor);
+    renderModal(); toast('기본 양식으로 복원했습니다.'); return;
+  }
+  if(el.dataset.msgcopy){
+    syncMsg();
+    const s = DB.schedules.find(x=>x.id===el.dataset.msgcopy);
+    const text = mForm.text || '';
+    const done = () => toast(s.name + ' 문구를 복사했습니다. 카카오톡에 붙여넣기 하세요.');
+    navigator.clipboard ? navigator.clipboard.writeText(text).then(done, ()=>fallbackCopy(text)) : fallbackCopy(text);
+    return;
+  }
   if(el.dataset.xlead !== undefined){
     syncModal(); const v = Number(el.dataset.xlead), i = (mForm.leads=mForm.leads||[]).indexOf(v);
     i>-1 ? mForm.leads.splice(i,1) : mForm.leads.push(v); renderModal(); return;
@@ -1654,6 +1679,7 @@ document.addEventListener('input', e=>{
     const h = document.getElementById('p_amt_hint');
     if(h) h.textContent = n ? manwon(n)+'원' : '부가세 포함 금액 기준';
   }
+  if(t.id === 'msg_text' && mForm){ mForm.text = t.value; }
   if(t.id === 'p_q'){ payFilter.q = t.value; const p=t.selectionStart; renderPayList();
     const el=document.getElementById('p_q'); el.focus(); el.setSelectionRange(p,p); }
   if(t.id === 'mt_q'){ meetFilter.q = t.value; const p=t.selectionStart; renderModal();
@@ -1749,47 +1775,112 @@ function submitMeet(){
   resetMeetForm(); modal = null; mForm = null; save(); renderAll();
 }
 
-/* 카카오톡에 바로 붙여넣을 입금 요청 문구 */
+/* ---------- 입금 요청 문자 (문구 확인 · 수정 · 복사) ---------- */
 const TAX_TXT = {'말일':'전월 말일', '월초':'당월 초', '입금일':'입금일 당일'};
-function paymentMessage(s, base){
+const DEFAULT_MSG_TEMPLATE = [
+  '안녕하세요, {예금주}입니다.',
+  '{안내문구}',
+  '',
+  '▶업체명',
+  '{업체명}',
+  '',
+  '▶입금 요청 금액',
+  '{금액}',
+  '',
+  '▶입금 예정일',
+  '{예정일}',
+  '',
+  '▶계좌번호',
+  '{은행}',
+  '{계좌}',
+  '{예금주}',
+  '',
+  '{세금계산서}확인 후 회신 부탁드립니다. 감사합니다.',
+  '{담당자}'
+].join('\n');
+
+function msgTokens(s, base){
   const due = dueDateOf(s, base);
   const late = diffDays(due, today()) < 0 && !isPaid(s, base);
-  const ym = base.getFullYear() + "년 " + (base.getMonth()+1) + "월";
-  const dueTxt = due.getFullYear() + "년 " + (due.getMonth()+1) + "월 " + due.getDate() + "일(" + WEEK[due.getDay()] + ")";
-  const lines = [];
-  lines.push("안녕하세요, " + PAYEE.company + "입니다.");
-  lines.push(late
-    ? ym + " 대금 입금 예정일이 지났으나 아직 확인되지 않아 안내드립니다."
-    : ym + " 대금 입금 요청드립니다.");
-  lines.push("");
-  lines.push("▶업체명");
-  lines.push(s.name);
-  lines.push("");
-  lines.push("▶입금 요청 금액");
-  lines.push(won(s.amount) + "원");
-  lines.push("");
-  lines.push(late ? "▶입금 예정일 (지남)" : "▶입금 예정일");
-  lines.push(dueTxt);
-  lines.push("");
-  lines.push("▶계좌번호");
-  lines.push(PAYEE.bank);
-  lines.push(PAYEE.account);
-  lines.push(PAYEE.company);
-  if(s.taxDay && TAX_TXT[s.taxDay]){
-    lines.push("");
-    lines.push("세금계산서는 " + TAX_TXT[s.taxDay] + " 발행됩니다.");
-  }
-  lines.push("");
-  lines.push("확인 후 회신 부탁드립니다. 감사합니다.");
-  if(s.owner) lines.push("(담당: " + s.owner + ")");
-  return lines.join("\n");
+  const ym = base.getFullYear() + '년 ' + (base.getMonth()+1) + '월';
+  return {
+    '{업체명}': s.name,
+    '{금액}': won(s.amount) + '원',
+    '{예정일}': due.getFullYear() + '년 ' + (due.getMonth()+1) + '월 ' + due.getDate() + '일(' + WEEK[due.getDay()] + ')',
+    '{월}': ym,
+    '{은행}': PAYEE.bank,
+    '{계좌}': PAYEE.account,
+    '{예금주}': PAYEE.company,
+    '{안내문구}': late
+      ? ym + ' 대금 입금 예정일이 지났으나 아직 확인되지 않아 안내드립니다.'
+      : ym + ' 대금 입금 요청드립니다.',
+    '{세금계산서}': (s.taxDay && TAX_TXT[s.taxDay]) ? '세금계산서는 ' + TAX_TXT[s.taxDay] + ' 발행됩니다.\n\n' : '',
+    '{담당자}': s.owner ? '(담당: ' + s.owner + ')' : ''
+  };
 }
-function copyPaymentMessage(id){
-  const s = DB.schedules.find(x=>x.id===id);
+function paymentMessage(s, base){
+  const tk = msgTokens(s, base);
+  let out = DB.template || DEFAULT_MSG_TEMPLATE;
+  Object.keys(tk).forEach(k => { out = out.split(k).join(tk[k]); });
+  return out.replace(/\n{3,}/g, '\n\n').trim();
+}
+
+function openMsgModal(id){
+  const s = DB.schedules.find(x => x.id === id);
   if(!s) return;
-  const text = paymentMessage(s, cursor);
-  const done = () => toast(s.name + " 입금 요청 문자를 복사했습니다. 카카오톡에 붙여넣기 하세요.");
-  navigator.clipboard ? navigator.clipboard.writeText(text).then(done, ()=>fallbackCopy(text)) : fallbackCopy(text);
+  modal = {kind:'msg', id};
+  mForm = {text: paymentMessage(s, cursor), template: DB.template || DEFAULT_MSG_TEMPLATE, tplOpen:false};
+  renderModal();
+}
+function syncMsg(){
+  if(!mForm) return;
+  const g = id => document.getElementById(id);
+  if(g('msg_text')) mForm.text = g('msg_text').value;
+  if(g('msg_tpl')) mForm.template = g('msg_tpl').value;
+}
+function msgModal(){
+  const s = DB.schedules.find(x => x.id === modal.id);
+  if(!s) return '';
+  const f = mForm || {};
+  const due = dueDateOf(s, cursor);
+  return `<div class="modal wide">
+    <div class="modal-head">
+      <div class="ttl">💬 입금 요청 문자</div>
+      <span style="color:var(--muted);font-size:12px">${esc(s.name)} · ${won(s.amount)}원 · ${fmtDate(due)}</span>
+      <button class="x" data-mclose="1" title="닫기">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="f">
+        <label>보낼 문구 <span class="hint">(수정한 그대로 복사됩니다 · 카카오톡에 붙여넣기)</span></label>
+        <textarea id="msg_text" style="min-height:300px; line-height:1.75">${esc(f.text || '')}</textarea>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button class="btn sm" data-msgreset="1">↺ 기본 문구로 되돌리기</button>
+        <button class="btn sm" data-msgtpl="1">${f.tplOpen ? '양식 편집 닫기' : '⚙ 문구 양식 수정'}</button>
+        <span class="hint" style="margin-left:auto">${(f.text||'').length}자</span>
+      </div>
+      ${f.tplOpen ? `
+      <div class="f" style="margin-top:16px; padding-top:16px; border-top:1px dashed var(--line)">
+        <label>문구 양식 <span class="hint">모든 업체에 공통으로 적용됩니다</span></label>
+        <textarea id="msg_tpl" style="min-height:240px; line-height:1.75">${esc(f.template || '')}</textarea>
+        <div class="hint" style="line-height:1.8">
+          사용 가능한 태그 —
+          <b>{업체명}</b> <b>{금액}</b> <b>{예정일}</b> <b>{월}</b>
+          <b>{은행}</b> <b>{계좌}</b> <b>{예금주}</b>
+          <b>{안내문구}</b>(예정/연체 문장 자동) <b>{세금계산서}</b>(설정 시에만) <b>{담당자}</b>(있을 때만)
+        </div>
+        <div class="row" style="margin-top:10px">
+          <button class="btn sm primary" data-tplsave="1">양식 저장</button>
+          <button class="btn sm" data-tpldefault="1">기본 양식 복원</button>
+        </div>
+      </div>` : ''}
+    </div>
+    <div class="modal-foot">
+      <div class="note">${cursor.getFullYear()}년 ${cursor.getMonth()+1}월 기준으로 금액·날짜가 채워집니다.</div>
+      <button class="btn sm" data-mclose="1">닫기</button>
+      <button class="btn sm primary" data-msgcopy="${s.id}">📋 복사하기</button>
+    </div>
+  </div>`;
 }
 
 function copyMinutes(id){
