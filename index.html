@@ -340,6 +340,7 @@ tr.editing td{box-shadow:inset 0 0 0 1px var(--accent-line)}
   border-radius:16px; box-shadow:var(--shadow); overflow:hidden; animation:pop .16s ease-out;
 }
 @keyframes pop{from{transform:translateY(-8px); opacity:.4} to{transform:none; opacity:1}}
+.modal.wide{max-width:940px}
 .modal-head{display:flex; align-items:center; gap:10px; padding:16px 18px; border-bottom:1px solid var(--line); background:var(--panel2); flex-wrap:wrap}
 .modal-head .ttl{font-size:16px; font-weight:800; letter-spacing:-.3px}
 .modal-head .x{margin-left:auto; width:32px; height:32px; border-radius:8px; border:1px solid var(--line); background:var(--panel); color:var(--muted); font-size:15px}
@@ -394,22 +395,20 @@ tr.editing td{box-shadow:inset 0 0 0 1px var(--accent-line)}
         <button id="mNext">›</button>
       </div>
       <button class="btn sm" id="mToday">이번 달</button>
+      <button class="btn primary" data-new="pay">＋ 업체 등록</button>
+      <button class="btn primary" data-new="meet">＋ 미팅 등록</button>
     </div>
   </div>
 
   <nav class="secnav">
     <a href="#sec-summary">📅 이번 달 현황</a>
-    <a href="#sec-company">🏢 업체 등록</a>
     <a href="#sec-paylist">💰 입금 현황 <span class="cnt" id="navPayCnt">0</span></a>
-    <a href="#sec-meetform">✍️ 미팅 등록</a>
     <a href="#sec-meetlist">🗓 미팅 목록 <span class="cnt" id="navMeetCnt">0</span></a>
   </nav>
 
   <div id="bannerSlot"></div>
   <section id="sec-summary"></section>
-  <section id="sec-company"></section>
   <section id="sec-paylist"></section>
-  <section id="sec-meetform"></section>
   <section id="sec-meetlist"></section>
 </div>
 
@@ -632,7 +631,7 @@ function renderSummary(){
       <div class="card">
         <div class="card-head">
           <h2>다가오는 미팅</h2>
-          <div class="right"><button class="btn sm" data-jump="sec-meetform">미팅 등록 →</button></div>
+          <div class="right"><button class="btn sm" data-new="meet">미팅 등록 →</button></div>
         </div>
         <div class="mini">
           ${mtgs.length ? mtgs.map(m=>{
@@ -714,80 +713,6 @@ function calendarHTML(base){
 /* =====================================================================
    RENDER : 입금 관리
    ===================================================================== */
-/* ---------- 업체 등록 폼 ---------- */
-function renderCompanyForm(){
-  const leads = form.leads, chans = form.channels, d = form.draft || {};
-  const LEADS = [{v:7,t:'7일 전'},{v:3,t:'3일 전'},{v:1,t:'1일 전'},{v:0,t:'당일'}];
-  const CHANS = ['사내알림','이메일','카카오톡','SMS'];
-
-  document.getElementById('sec-company').innerHTML = `
-  <div class="sec-label">업체 등록</div>
-  <div class="card">
-    <div class="card-head">
-      <h2>🏢 업체 등록</h2>
-      <span class="sub">매월 반복되는 입금 예정일과 요청 금액, 알림 시점을 설정합니다. 등록한 업체는 아래 목록에서 바로 수정할 수 있습니다.</span>
-    </div>
-    <div class="form-grid">
-      <div class="f">
-        <label>업체명 <span class="req">*</span></label>
-        <input type="text" id="p_name" placeholder="예) 서울드림의원" value="${esc(d.name||'')}">
-      </div>
-      <div class="f">
-        <label>매월 입금일 <span class="req">*</span></label>
-        <select id="p_day">
-          ${Array.from({length:31},(_,i)=>i+1).map(n=>`<option value="${n}" ${String(d.day)===String(n)?'selected':''}>매월 ${n}일</option>`).join('')}
-          <option value="EOM" ${d.day==='EOM'?'selected':''}>매월 말일</option>
-        </select>
-        <div class="hint">해당 월에 없는 날짜(31일 등)는 자동으로 말일 처리됩니다.</div>
-      </div>
-      <div class="f">
-        <label>입금 요청 금액 <span class="req">*</span></label>
-        <div class="money-in"><input type="text" id="p_amt" class="money" placeholder="0" value="${esc(d.amt||'')}"><span>원</span></div>
-        <div class="hint" id="p_amt_hint">${d.amt ? manwon(parseMoney(d.amt))+'원' : '부가세 포함 금액 기준'}</div>
-      </div>
-      <div class="f">
-        <label>담당자</label>
-        <input type="text" id="p_owner" placeholder="예) 홍길동" value="${esc(d.owner||'')}">
-      </div>
-
-      <div class="f">
-        <label>결제 수단</label>
-        <select id="p_method">${['계좌이체','자동이체','카드결제','현금','기타'].map(v=>`<option ${d.method===v?'selected':''}>${v}</option>`).join('')}</select>
-      </div>
-      <div class="f">
-        <label>세금계산서 발행일</label>
-        <select id="p_tax">
-          <option value="">선택 안 함</option>
-          <option value="말일" ${d.tax==='말일'?'selected':''}>전월 말일 발행</option>
-          <option value="월초" ${d.tax==='월초'?'selected':''}>당월 초 발행</option>
-          <option value="입금일" ${d.tax==='입금일'?'selected':''}>입금일 당일 발행</option>
-        </select>
-      </div>
-      <div class="f span2">
-        <label>알림 시점 <span class="hint">(복수 선택 · 담당자에게 자동 발송)</span></label>
-        <div class="checks" id="p_leads">
-          ${LEADS.map(l=>`<div class="chk ${leads.indexOf(l.v)>-1?'on':''}" data-lead="${l.v}">${leads.indexOf(l.v)>-1?'☑':'☐'} 입금 ${l.t}</div>`).join('')}
-        </div>
-      </div>
-
-      <div class="f span2">
-        <label>알림 채널</label>
-        <div class="checks" id="p_chans">
-          ${CHANS.map(c=>`<div class="chk ${chans.indexOf(c)>-1?'on':''}" data-chan="${c}">${chans.indexOf(c)>-1?'☑':'☐'} ${c}</div>`).join('')}
-        </div>
-      </div>
-      <div class="f span2">
-        <label>메모 <span class="hint">(입금 조건, 지연 이력 등)</span></label>
-        <input type="text" id="p_memo" placeholder="예) 월초 계산서 발행 · 입금 지연 잦음 → D-3 사전 안내" value="${esc(d.memo||'')}">
-      </div>
-    </div>
-    <div class="form-actions">
-      <div class="note">* 표시는 필수 입력 항목입니다. 등록하면 매월 예정 건이 자동 생성됩니다.</div>
-      <button class="btn primary" id="p_submit">업체 등록</button>
-    </div>
-  </div>`;
-}
-
 /* ---------- 업체별 입금 현황 목록 ---------- */
 function renderPayList(){
   let list = DB.schedules.slice();
@@ -807,6 +732,7 @@ function renderPayList(){
       <h2>💰 업체별 입금 현황</h2>
       <span class="sub">${ymKey(cursor)} 기준 · 예정 ${won(s.planned)}원 · 완료 ${won(s.paid)}원 · 미입금 ${won(s.unpaid)}원</span>
       <div class="right">
+        <button class="btn sm primary" data-new="pay">＋ 업체 등록</button>
         <div class="searchbox"><input type="text" id="p_q" placeholder="업체·담당자 검색" value="${esc(payFilter.q)}"></div>
         <select id="p_status" style="width:auto">
           <option value="all" ${payFilter.status==='all'?'selected':''}>전체 상태</option>
@@ -966,111 +892,6 @@ function closeEditor(){ payEdit = null; editForm = null; }
 /* =====================================================================
    RENDER : 미팅 일정
    ===================================================================== */
-/* ---------- 미팅 등록/수정 폼 ---------- */
-function renderMeetForm(){
-  const e = meetEdit ? DB.meetings.find(m=>m.id===meetEdit) : null;
-  const t = today();
-  const companies = DB.schedules.map(s=>s.name);
-
-  document.getElementById('sec-meetform').innerHTML = `
-  <div class="sec-label">미팅 등록</div>
-  <div class="card">
-    <div class="card-head">
-      <h2>${e?'✏️ 미팅 수정':'✍️ 미팅 등록'}</h2>
-      <span class="sub">일시·참석자·회의록·액션 아이템을 함께 기록합니다. 미팅 전날 자동 알림이 발송됩니다.</span>
-    </div>
-    <div class="form-grid">
-      <div class="f">
-        <label>업체명 <span class="req">*</span></label>
-        <input type="text" id="m_company" list="coList" placeholder="업체 선택 또는 직접 입력" value="${esc(e?e.company:'')}">
-        <datalist id="coList">${companies.map(c=>`<option value="${esc(c)}">`).join('')}</datalist>
-      </div>
-      <div class="f">
-        <label>미팅 일자 <span class="req">*</span></label>
-        <input type="date" id="m_date" value="${esc(e?e.date:fmtISO(t))}">
-      </div>
-      <div class="f">
-        <label>시작 시간 <span class="req">*</span></label>
-        <input type="time" id="m_time" value="${esc(e?e.time:'14:00')}">
-      </div>
-      <div class="f">
-        <label>소요 시간</label>
-        <select id="m_dur">${['30분','1시간','1시간 30분','2시간','반나절'].map(v=>`<option ${e&&e.dur===v?'selected':''}>${v}</option>`).join('')}</select>
-      </div>
-
-      <div class="f">
-        <label>진행 방식</label>
-        <div class="seg" id="m_mode">
-          ${['대면','화상','전화'].map(v=>`<button data-mode="${v}" class="${(form.mode||'대면')===v?'on':''}">${v}</button>`).join('')}
-        </div>
-      </div>
-      <div class="f span2">
-        <label>장소 / 접속 링크</label>
-        <input type="text" id="m_place" placeholder="예) 병원 원장실 / Google Meet 링크" value="${esc(e?e.place:'')}">
-      </div>
-      <div class="f">
-        <label>미팅 구분</label>
-        <select id="m_type">${['정기 보고','신규 제안','계약 협의','이슈 대응','기타'].map(v=>`<option ${e&&e.type===v?'selected':''}>${v}</option>`).join('')}</select>
-      </div>
-
-      <div class="f span2">
-        <label>참석자 – 우리 측 <span class="hint">(입력 후 Enter)</span></label>
-        <div class="chipbox" id="m_ours">
-          ${form.ours.map((n,i)=>`<span class="chip our"><b>${esc(n)}</b><button data-rm-our="${i}">×</button></span>`).join('')}
-          <input type="text" placeholder="예) 홍길동 팀장" data-chip="ours">
-        </div>
-      </div>
-      <div class="f span2">
-        <label>참석자 – 고객 측 <span class="hint">(입력 후 Enter)</span></label>
-        <div class="chipbox" id="m_clients">
-          ${form.clients.map((n,i)=>`<span class="chip cli"><b>${esc(n)}</b><button data-rm-cli="${i}">×</button></span>`).join('')}
-          <input type="text" placeholder="예) 이 원장" data-chip="clients">
-        </div>
-      </div>
-
-      <div class="f span2">
-        <label>안건 <span class="req">*</span></label>
-        <input type="text" id="m_agenda" placeholder="예) 9월 광고 예산 및 신규 상품 진행안 논의" value="${esc(e?e.agenda:'')}">
-      </div>
-      <div class="f span2">
-        <label>전날 알림</label>
-        <div class="row" style="gap:10px">
-          <div class="chk ${form.remind!==false?'on':''}" id="m_remind">${form.remind!==false?'☑':'☐'} 미팅 전날 알림 받기</div>
-          <select id="m_remind_at" style="width:auto">${['09:00','13:00','18:00','20:00'].map(v=>`<option ${(form.remindAt||'18:00')===v?'selected':''}>${v}</option>`).join('')}</select>
-          <span class="hint">전날 지정 시각에 담당자에게 알림</span>
-        </div>
-      </div>
-
-      <div class="f span4">
-        <label>회의록 – 논의 내용</label>
-        <textarea id="m_notes" placeholder="· 논의 배경&#10;· 주요 논의 사항&#10;· 고객 요청/피드백">${esc(e?e.notes:'')}</textarea>
-      </div>
-      <div class="f span2">
-        <label>결정 사항</label>
-        <textarea id="m_decisions" placeholder="· 확정된 내용&#10;· 합의 금액/일정">${esc(e?e.decisions:'')}</textarea>
-      </div>
-      <div class="f span2">
-        <label>액션 아이템 <span class="hint">(할 일 · 담당 · 기한)</span></label>
-        <div id="m_items">
-          ${form.items.map((it,i)=>`
-          <div class="ai-row">
-            <input type="text" placeholder="예) 9월 광고안 초안 발송" value="${esc(it.task)}" data-it="task" data-i="${i}">
-            <input type="text" placeholder="담당자" value="${esc(it.owner)}" data-it="owner" data-i="${i}">
-            <input type="date" value="${esc(it.due)}" data-it="due" data-i="${i}">
-            <button class="x" data-rm-item="${i}">×</button>
-          </div>`).join('')}
-        </div>
-        <button class="btn sm" id="m_add_item" style="align-self:flex-start">+ 액션 아이템 추가</button>
-      </div>
-    </div>
-    <div class="form-actions">
-      <div class="note">* 표시는 필수 입력 항목입니다. 회의록은 등록 후에도 수정할 수 있습니다.</div>
-      ${e?'<button class="btn" id="m_cancel">취소</button>':''}
-      <button class="btn primary" id="m_submit">${e?'수정 저장':'미팅 등록'}</button>
-    </div>
-  </div>`;
-}
-
 /* ---------- 미팅 목록 ---------- */
 function renderMeetList(){
   const t = today();
@@ -1089,6 +910,7 @@ function renderMeetList(){
       <h2>🗓 미팅 목록</h2>
       <span class="sub">전체 ${DB.meetings.length}건 · 표시 ${list.length}건</span>
       <div class="right">
+        <button class="btn sm primary" data-new="meet">＋ 미팅 등록</button>
         <div class="searchbox"><input type="text" id="mt_q" placeholder="업체·안건·참석자 검색" value="${esc(meetFilter.q)}"></div>
         <div class="seg" id="mt_scope" style="width:230px">
           ${[['upcoming','예정'],['past','지난'],['all','전체']].map(([v,t2])=>`<button data-scope="${v}" class="${meetFilter.scope===v?'on':''}">${t2}</button>`).join('')}
@@ -1163,7 +985,11 @@ function openModal(kind, key){
   if(wasEditing) renderPayList();
   renderModal();
 }
-function closeModal(){ modal = null; mForm = null; renderModal(); }
+function closeModal(){
+  modal = null; mForm = null;
+  if(meetEdit){ meetEdit = null; resetMeetForm(); }
+  renderModal();
+}
 
 function renderModal(){
   const root = document.getElementById('modalRoot');
@@ -1172,6 +998,8 @@ function renderModal(){
   if(modal.kind === 'pay')  html = modalPay();
   if(modal.kind === 'meet') html = modalMeet();
   if(modal.kind === 'day')  html = modalDay();
+  if(modal.kind === 'newpay')  html = payFormModal();
+  if(modal.kind === 'newmeet') html = meetFormModal();
   if(!html){ modal = null; root.classList.remove('open'); root.innerHTML=''; return; }
   root.innerHTML = html; root.classList.add('open');
 }
@@ -1332,6 +1160,199 @@ function modalMeet(){
     </div></div>`;
 }
 
+/* ---------- 업체 등록 (팝업) ---------- */
+function payFormModal(){
+  const leads = form.leads, chans = form.channels, d = form.draft || {};
+  const LEADS = [{v:7,t:'7일 전'},{v:3,t:'3일 전'},{v:1,t:'1일 전'},{v:0,t:'당일'}];
+  const CHANS = ['사내알림','이메일','카카오톡','SMS'];
+  return `<div class="modal wide">
+    <div class="modal-head">
+      <div class="ttl">🏢 업체 등록</div>
+      <span class="sub" style="color:var(--muted);font-size:12px">매월 반복되는 입금 예정일과 요청 금액을 설정합니다</span>
+      <button class="x" data-mclose="1" title="닫기">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="f">
+          <label>업체명 <span class="req">*</span></label>
+          <input type="text" id="p_name" placeholder="예) 서울드림의원" value="${esc(d.name||'')}">
+        </div>
+        <div class="f">
+          <label>매월 입금일 <span class="req">*</span></label>
+          <select id="p_day">
+            ${Array.from({length:31},(_,i)=>i+1).map(n=>`<option value="${n}" ${String(d.day)===String(n)?'selected':''}>매월 ${n}일</option>`).join('')}
+            <option value="EOM" ${d.day==='EOM'?'selected':''}>매월 말일</option>
+          </select>
+          <div class="hint">해당 월에 없는 날짜(31일 등)는 자동으로 말일 처리됩니다.</div>
+        </div>
+        <div class="f">
+          <label>입금 요청 금액 <span class="req">*</span></label>
+          <div class="money-in"><input type="text" id="p_amt" class="money" placeholder="0" value="${esc(d.amt||'')}"><span>원</span></div>
+          <div class="hint" id="p_amt_hint">${d.amt ? manwon(parseMoney(d.amt))+'원' : '부가세 포함 금액 기준'}</div>
+        </div>
+        <div class="f">
+          <label>담당자</label>
+          <input type="text" id="p_owner" placeholder="예) 홍길동" value="${esc(d.owner||'')}">
+        </div>
+        <div class="f">
+          <label>결제 수단</label>
+          <select id="p_method">${['계좌이체','자동이체','카드결제','현금','기타'].map(v=>`<option ${d.method===v?'selected':''}>${v}</option>`).join('')}</select>
+        </div>
+        <div class="f">
+          <label>세금계산서 발행일</label>
+          <select id="p_tax">
+            <option value="">선택 안 함</option>
+            <option value="말일" ${d.tax==='말일'?'selected':''}>전월 말일 발행</option>
+            <option value="월초" ${d.tax==='월초'?'selected':''}>당월 초 발행</option>
+            <option value="입금일" ${d.tax==='입금일'?'selected':''}>입금일 당일 발행</option>
+          </select>
+        </div>
+        <div class="f span2">
+          <label>알림 시점 <span class="hint">(복수 선택 · 담당자에게 자동 발송)</span></label>
+          <div class="checks">
+            ${LEADS.map(l=>`<div class="chk ${leads.indexOf(l.v)>-1?'on':''}" data-lead="${l.v}">${leads.indexOf(l.v)>-1?'☑':'☐'} 입금 ${l.t}</div>`).join('')}
+          </div>
+        </div>
+        <div class="f span2">
+          <label>알림 채널</label>
+          <div class="checks">
+            ${CHANS.map(c=>`<div class="chk ${chans.indexOf(c)>-1?'on':''}" data-chan="${c}">${chans.indexOf(c)>-1?'☑':'☐'} ${c}</div>`).join('')}
+          </div>
+        </div>
+        <div class="f span2">
+          <label>메모 <span class="hint">(입금 조건, 지연 이력 등)</span></label>
+          <input type="text" id="p_memo" placeholder="예) 월초 계산서 발행 · 입금 지연 잦음 → D-3 사전 안내" value="${esc(d.memo||'')}">
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <div class="note">* 표시는 필수 입력 항목입니다. 등록하면 매월 예정 건이 자동 생성됩니다.</div>
+      <button class="btn sm" data-mclose="1">취소</button>
+      <button class="btn sm primary" id="p_submit">업체 등록</button>
+    </div>
+  </div>`;
+}
+
+/* ---------- 미팅 등록 / 수정 (팝업) ---------- */
+function meetFormModal(){
+  const e = meetEdit ? DB.meetings.find(m=>m.id===meetEdit) : null;
+  const t = today();
+  const companies = DB.schedules.map(s=>s.name);
+  return `<div class="modal wide">
+    <div class="modal-head">
+      <div class="ttl">${e?'✏️ 미팅 수정':'✍️ 미팅 등록'}</div>
+      <span class="sub" style="color:var(--muted);font-size:12px">일시·참석자·회의록·액션 아이템을 함께 기록합니다</span>
+      <button class="x" data-mclose="1" title="닫기">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="f">
+          <label>업체명 <span class="req">*</span></label>
+          <input type="text" id="m_company" list="coList" placeholder="업체 선택 또는 직접 입력" value="${esc(e?e.company:'')}">
+          <datalist id="coList">${companies.map(c=>`<option value="${esc(c)}">`).join('')}</datalist>
+        </div>
+        <div class="f">
+          <label>미팅 구분</label>
+          <select id="m_type">${['정기 보고','신규 제안','계약 협의','이슈 대응','기타'].map(v=>`<option ${e&&e.type===v?'selected':''}>${v}</option>`).join('')}</select>
+        </div>
+        <div class="f">
+          <label>미팅 일자 <span class="req">*</span></label>
+          <input type="date" id="m_date" value="${esc(e?e.date:fmtISO(t))}">
+        </div>
+        <div class="f">
+          <label>시작 시간 <span class="req">*</span></label>
+          <input type="time" id="m_time" value="${esc(e?e.time:'14:00')}">
+        </div>
+        <div class="f">
+          <label>소요 시간</label>
+          <select id="m_dur">${['30분','1시간','1시간 30분','2시간','반나절'].map(v=>`<option ${e&&e.dur===v?'selected':''}>${v}</option>`).join('')}</select>
+        </div>
+        <div class="f">
+          <label>진행 방식</label>
+          <div class="seg">
+            ${['대면','화상','전화'].map(v=>`<button data-mode="${v}" class="${(form.mode||'대면')===v?'on':''}">${v}</button>`).join('')}
+          </div>
+        </div>
+        <div class="f span2">
+          <label>장소 / 접속 링크</label>
+          <input type="text" id="m_place" placeholder="예) 병원 원장실 / Google Meet 링크" value="${esc(e?e.place:'')}">
+        </div>
+        <div class="f">
+          <label>참석자 – 우리 측 <span class="hint">(입력 후 Enter)</span></label>
+          <div class="chipbox" id="m_ours">
+            ${form.ours.map((n,i)=>`<span class="chip our"><b>${esc(n)}</b><button data-rm-our="${i}">×</button></span>`).join('')}
+            <input type="text" placeholder="예) 홍길동 팀장" data-chip="ours">
+          </div>
+        </div>
+        <div class="f">
+          <label>참석자 – 고객 측 <span class="hint">(입력 후 Enter)</span></label>
+          <div class="chipbox" id="m_clients">
+            ${form.clients.map((n,i)=>`<span class="chip cli"><b>${esc(n)}</b><button data-rm-cli="${i}">×</button></span>`).join('')}
+            <input type="text" placeholder="예) 이 원장" data-chip="clients">
+          </div>
+        </div>
+        <div class="f span2">
+          <label>안건 <span class="req">*</span></label>
+          <input type="text" id="m_agenda" placeholder="예) 9월 광고 예산 및 신규 상품 진행안 논의" value="${esc(e?e.agenda:'')}">
+        </div>
+        <div class="f span2">
+          <label>전날 알림</label>
+          <div class="row" style="gap:10px">
+            <div class="chk ${form.remind!==false?'on':''}" id="m_remind">${form.remind!==false?'☑':'☐'} 미팅 전날 알림 받기</div>
+            <select id="m_remind_at" style="width:auto">${['09:00','13:00','18:00','20:00'].map(v=>`<option ${(form.remindAt||'18:00')===v?'selected':''}>${v}</option>`).join('')}</select>
+            <span class="hint">전날 지정 시각 알림</span>
+          </div>
+        </div>
+        <div class="f span2">
+          <label>회의록 – 논의 내용</label>
+          <textarea id="m_notes" placeholder="· 논의 배경&#10;· 주요 논의 사항&#10;· 고객 요청/피드백">${esc(e?e.notes:'')}</textarea>
+        </div>
+        <div class="f span2">
+          <label>결정 사항</label>
+          <textarea id="m_decisions" placeholder="· 확정된 내용&#10;· 합의 금액/일정">${esc(e?e.decisions:'')}</textarea>
+        </div>
+        <div class="f span2">
+          <label>액션 아이템 <span class="hint">(할 일 · 담당 · 기한)</span></label>
+          <div id="m_items">
+            ${form.items.map((it,i)=>`
+            <div class="ai-row">
+              <input type="text" placeholder="예) 9월 광고안 초안 발송" value="${esc(it.task)}" data-it="task" data-i="${i}">
+              <input type="text" placeholder="담당자" value="${esc(it.owner)}" data-it="owner" data-i="${i}">
+              <input type="date" value="${esc(it.due)}" data-it="due" data-i="${i}">
+              <button class="x" data-rm-item="${i}">×</button>
+            </div>`).join('')}
+          </div>
+          <button class="btn sm" id="m_add_item" style="align-self:flex-start">+ 액션 아이템 추가</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <div class="note">* 표시는 필수 입력 항목입니다. 회의록은 등록 후에도 수정할 수 있습니다.</div>
+      <button class="btn sm" data-mclose="1">취소</button>
+      <button class="btn sm primary" id="m_submit">${e?'수정 저장':'미팅 등록'}</button>
+    </div>
+  </div>`;
+}
+
+/* 팝업 열기 */
+function openPayForm(){
+  closeEditor();
+  form.draft = null; form.leads = [3,1,0]; form.channels = ['사내알림'];
+  modal = {kind:'newpay'}; mForm = null; renderPayList(); renderModal();
+}
+function openMeetForm(id){
+  const m = id ? DB.meetings.find(x=>x.id===id) : null;
+  meetEdit = m ? m.id : null;
+  if(m){
+    form.ours = (m.ours||[]).slice(); form.clients = (m.clients||[]).slice();
+    form.items = (m.items||[]).map(i=>({...i}));
+    form.mode = m.mode || '대면'; form.remind = m.remind !== false; form.remindAt = m.remindAt || '18:00';
+  } else {
+    resetMeetForm();
+  }
+  modal = {kind:'newmeet'}; mForm = null; renderModal();
+}
+
 /* ---------- 날짜별 전체 목록 ---------- */
 function modalDay(){
   const iso = modal.date, d = new Date(iso+'T00:00');
@@ -1449,7 +1470,7 @@ function renderAll(){
   document.getElementById('mLabel').textContent = cursor.getFullYear()+'년 '+(cursor.getMonth()+1)+'월';
   document.getElementById('navPayCnt').textContent = DB.schedules.filter(s=>s.active).length;
   document.getElementById('navMeetCnt').textContent = DB.meetings.filter(m=>diffDays(new Date(m.date+'T00:00'),today())>=0).length;
-  renderSummary(); renderCompanyForm(); renderPayList(); renderMeetForm(); renderMeetList(); renderAlerts(); renderModal();
+  renderSummary(); renderPayList(); renderMeetList(); renderAlerts(); renderModal();
 }
 /* 섹션 이동 (탭 대신) */
 function jumpTo(id){
@@ -1514,7 +1535,7 @@ document.getElementById('exportBtn').onclick = ()=>{
 
 /* 전역 클릭 위임 */
 document.addEventListener('click', e=>{
-  const el = e.target.closest('[data-jump],[data-pay],[data-unpay],[data-edit],[data-del],[data-lead],[data-chan],[data-esave],[data-ecancel],[data-elead],[data-echan],[data-eactive],[data-ev],[data-day],[data-mclose],[data-medit],[data-mcancel],[data-msave],[data-mdel],[data-mtcopy2],[data-xlead],[data-xchan],[data-xactive],[data-xremind],[data-toggle],[data-mt-edit],[data-mt-del],[data-mt-copy],[data-rm-our],[data-rm-cli],[data-rm-item],[data-mode],[data-scope],#openBell2,#p_submit,#p_cancel,#m_submit,#m_cancel,#m_add_item,#m_remind');
+  const el = e.target.closest('[data-jump],[data-pay],[data-unpay],[data-edit],[data-del],[data-lead],[data-chan],[data-esave],[data-ecancel],[data-elead],[data-echan],[data-eactive],[data-ev],[data-day],[data-new],[data-mclose],[data-medit],[data-mcancel],[data-msave],[data-mdel],[data-mtcopy2],[data-xlead],[data-xchan],[data-xactive],[data-xremind],[data-toggle],[data-mt-edit],[data-mt-del],[data-mt-copy],[data-rm-our],[data-rm-cli],[data-rm-item],[data-mode],[data-scope],#openBell2,#p_submit,#p_cancel,#m_submit,#m_cancel,#m_add_item,#m_remind');
   if(!el) return;
 
   // 캘린더/요약 항목 클릭 → 상세 모달
@@ -1523,10 +1544,12 @@ document.addEventListener('click', e=>{
     openModal(kind, id); return;
   }
   if(el.dataset.day){ openModal('day', el.dataset.day); return; }
+  if(el.dataset.new === 'pay'){ openPayForm(); return; }
+  if(el.dataset.new === 'meet'){ openMeetForm(null); return; }
   if(el.dataset.mclose){ closeModal(); return; }
   if(el.dataset.medit){
-    const src = modal.kind==='pay' ? DB.schedules.find(x=>x.id===modal.id) : DB.meetings.find(x=>x.id===modal.id);
-    mForm = JSON.parse(JSON.stringify(src));
+    if(modal.kind === 'meet'){ openMeetForm(modal.id); return; }
+    mForm = JSON.parse(JSON.stringify(DB.schedules.find(x=>x.id===modal.id)));
     modal.edit = true; renderModal(); return;
   }
   if(el.dataset.mcancel){ modal.edit = false; mForm = null; renderModal(); return; }
@@ -1609,13 +1632,13 @@ document.addEventListener('click', e=>{
     syncCompanyInputs();
     const v = Number(el.dataset.lead), i = form.leads.indexOf(v);
     i>-1 ? form.leads.splice(i,1) : form.leads.push(v);
-    renderCompanyForm(); return;
+    renderModal(); return;
   }
   if(el.dataset.chan){
     syncCompanyInputs();
     const v = el.dataset.chan, i = form.channels.indexOf(v);
     i>-1 ? form.channels.splice(i,1) : form.channels.push(v);
-    renderCompanyForm(); return;
+    renderModal(); return;
   }
 
   // 입금 폼 제출/취소
@@ -1623,13 +1646,7 @@ document.addEventListener('click', e=>{
 
   // 미팅 카드 토글
   if(el.dataset.toggle){ el.closest('.mtg').classList.toggle('open'); return; }
-  if(el.dataset.mtEdit){
-    const m = DB.meetings.find(x=>x.id===el.dataset.mtEdit);
-    meetEdit = m.id;
-    form.ours = (m.ours||[]).slice(); form.clients = (m.clients||[]).slice();
-    form.items = (m.items||[]).map(i=>({...i})); form.mode = m.mode; form.remind = m.remind!==false; form.remindAt = m.remindAt;
-    renderMeetForm(); jumpTo('sec-meetform'); return;
-  }
+  if(el.dataset.mtEdit){ openMeetForm(el.dataset.mtEdit); return; }
   if(el.dataset.mtDel){
     if(confirm('이 미팅 기록을 삭제할까요?')){
       DB.meetings = DB.meetings.filter(x=>x.id!==el.dataset.mtDel);
@@ -1639,15 +1656,15 @@ document.addEventListener('click', e=>{
   if(el.dataset.mtCopy){ copyMinutes(el.dataset.mtCopy); return; }
 
   // 참석자 chip 삭제
-  if(el.dataset.rmOur !== undefined){ form.ours.splice(Number(el.dataset.rmOur),1); renderMeetForm(); return; }
-  if(el.dataset.rmCli !== undefined){ form.clients.splice(Number(el.dataset.rmCli),1); renderMeetForm(); return; }
-  if(el.dataset.rmItem !== undefined){ syncItemInputs(); form.items.splice(Number(el.dataset.rmItem),1); renderMeetForm(); return; }
-  if(el.id === 'm_add_item'){ syncItemInputs(); form.items.push({task:'',owner:'',due:'',done:false}); renderMeetForm(); return; }
-  if(el.dataset.mode){ form.mode = el.dataset.mode; renderMeetForm(); return; }
-  if(el.id === 'm_remind'){ form.remind = !(form.remind!==false); renderMeetForm(); return; }
+  if(el.dataset.rmOur !== undefined){ form.ours.splice(Number(el.dataset.rmOur),1); renderModal(); return; }
+  if(el.dataset.rmCli !== undefined){ form.clients.splice(Number(el.dataset.rmCli),1); renderModal(); return; }
+  if(el.dataset.rmItem !== undefined){ syncItemInputs(); form.items.splice(Number(el.dataset.rmItem),1); renderModal(); return; }
+  if(el.id === 'm_add_item'){ syncItemInputs(); form.items.push({task:'',owner:'',due:'',done:false}); renderModal(); return; }
+  if(el.dataset.mode){ form.mode = el.dataset.mode; renderModal(); return; }
+  if(el.id === 'm_remind'){ form.remind = !(form.remind!==false); renderModal(); return; }
   if(el.dataset.scope){ meetFilter.scope = el.dataset.scope; renderMeetList(); return; }
   if(el.id === 'm_submit'){ submitMeet(); return; }
-  if(el.id === 'm_cancel'){ meetEdit=null; resetMeetForm(); renderMeetForm(); return; }
+  if(el.id === 'm_cancel'){ meetEdit=null; resetMeetForm(); renderModal(); return; }
 });
 
 /* 입력 이벤트 */
@@ -1689,7 +1706,7 @@ document.addEventListener('keydown', e=>{
   if(t.dataset && t.dataset.chip && e.key === 'Enter'){
     e.preventDefault();
     const v = t.value.trim(); if(!v) return;
-    form[t.dataset.chip].push(v); t.value=''; renderMeetForm();
+    form[t.dataset.chip].push(v); t.value=''; renderModal();
     const box = document.getElementById(t.dataset.chip==='ours'?'m_ours':'m_clients');
     box.querySelector('input').focus();
   }
@@ -1712,6 +1729,7 @@ function submitPay(){
     if(!confirm('이미 같은 이름의 업체가 있습니다. 그래도 등록할까요?')) return;
   DB.schedules.push({id:uid(), ...data});
   form.leads = [3,1,0]; form.channels = ['사내알림']; form.draft = null;
+  modal = null; mForm = null;
   save(); renderAll();
   toast(name + ' 입금 일정이 등록되었습니다. (수정은 목록의 ✏️ 버튼)');
 }
@@ -1750,7 +1768,7 @@ function submitMeet(){
     DB.meetings.push({id:uid(), ...data});
     toast(company + ' 미팅이 등록되었습니다. 전날 ' + data.remindAt + ' 알림 예약됨.');
   }
-  resetMeetForm(); save(); renderAll();
+  resetMeetForm(); modal = null; mForm = null; save(); renderAll();
 }
 
 function copyMinutes(id){
