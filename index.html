@@ -402,14 +402,14 @@ tr.editing td{box-shadow:inset 0 0 0 1px var(--accent-line)}
 
   <nav class="secnav">
     <a href="#sec-summary">📅 이번 달 현황</a>
-    <a href="#sec-paylist">💰 입금 현황 <span class="cnt" id="navPayCnt">0</span></a>
     <a href="#sec-meetlist">🗓 미팅 목록 <span class="cnt" id="navMeetCnt">0</span></a>
+    <a href="#sec-paylist">💰 입금 현황 <span class="cnt" id="navPayCnt">0</span></a>
   </nav>
 
   <div id="bannerSlot"></div>
   <section id="sec-summary"></section>
-  <section id="sec-paylist"></section>
   <section id="sec-meetlist"></section>
+  <section id="sec-paylist"></section>
 </div>
 
 <div class="modal-back" id="modalRoot"></div>
@@ -633,7 +633,10 @@ function renderSummary(){
       <div class="card">
         <div class="card-head">
           <h2>다가오는 미팅</h2>
-          <div class="right"><button class="btn sm" data-new="meet">미팅 등록 →</button></div>
+          <div class="right">
+            <button class="btn sm" data-jump="sec-meetlist">전체 목록 ↓</button>
+            <button class="btn sm" data-new="meet">＋ 미팅 등록</button>
+          </div>
         </div>
         <div class="mini">
           ${mtgs.length ? mtgs.map(m=>{
