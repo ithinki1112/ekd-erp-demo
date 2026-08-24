@@ -1,0 +1,1841 @@
+<!doctype html>
+<html lang="ko" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EKDLABS ERP · 입금/미팅 관리 (데모)</title>
+<style>
+:root{
+  --bg:#0b0e14; --panel:#131824; --panel2:#181f2e; --panel3:#1e2636;
+  --line:#252e40; --line2:#2f3a50;
+  --text:#e7ecf6; --text2:#b6c0d4; --muted:#7d8799;
+  --accent:#3b6ef6; --accent-soft:rgba(59,110,246,.14); --accent-line:rgba(59,110,246,.45);
+  --ok:#22c55e; --ok-soft:rgba(34,197,94,.14);
+  --warn:#f59e0b; --warn-soft:rgba(245,158,11,.14);
+  --danger:#ef4444; --danger-soft:rgba(239,68,68,.14);
+  --purple:#a78bfa; --purple-soft:rgba(167,139,250,.14);
+  --radius:14px; --radius-sm:9px;
+  --shadow:0 8px 28px rgba(0,0,0,.35);
+}
+/* 라이트 테마 — 사용자가 명시적으로 Light 를 선택한 경우 */
+html[data-theme="light"], :root[data-theme="light"]{
+  --bg:#f4f6fb; --panel:#ffffff; --panel2:#f7f9fd; --panel3:#eef2f9;
+  --line:#e2e8f2; --line2:#d3dbe8;
+  --text:#111827; --text2:#3f4a5f; --muted:#6b7688;
+  --accent-soft:rgba(59,110,246,.10); --ok-soft:rgba(34,197,94,.12);
+  --warn-soft:rgba(245,158,11,.14); --danger-soft:rgba(239,68,68,.10);
+  --purple-soft:rgba(124,58,237,.10); --purple:#7c3aed;
+  --shadow:0 6px 22px rgba(17,24,39,.08);
+}
+/* 테마 지정이 없을 때(시스템 설정 따름) 밝은 환경이면 라이트 팔레트 */
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    --bg:#f4f6fb; --panel:#ffffff; --panel2:#f7f9fd; --panel3:#eef2f9;
+    --line:#e2e8f2; --line2:#d3dbe8;
+    --text:#111827; --text2:#3f4a5f; --muted:#6b7688;
+    --accent-soft:rgba(59,110,246,.10); --ok-soft:rgba(34,197,94,.12);
+    --warn-soft:rgba(245,158,11,.14); --danger-soft:rgba(239,68,68,.10);
+    --purple-soft:rgba(124,58,237,.10); --purple:#7c3aed;
+    --shadow:0 6px 22px rgba(17,24,39,.08);
+  }
+}
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--bg); color:var(--text);
+  font-family:"Pretendard","Apple SD Gothic Neo","Malgun Gothic",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased;
+}
+button,input,select,textarea{font-family:inherit; font-size:14px; color:inherit}
+button{cursor:pointer}
+a{color:var(--accent); text-decoration:none}
+.num{font-variant-numeric:tabular-nums}
+
+/* ---------- top bar ---------- */
+.topbar{
+  position:sticky; top:0; z-index:60; display:flex; align-items:center; gap:16px;
+  padding:0 22px; height:58px; background:var(--panel); border-bottom:1px solid var(--line);
+}
+.brand{display:flex; align-items:center; gap:10px; font-weight:800; letter-spacing:-.2px}
+.brand .logo{
+  width:28px; height:28px; border-radius:8px; background:linear-gradient(135deg,var(--accent),#7c3aed);
+  display:grid; place-items:center; color:#fff; font-size:13px; font-weight:800;
+}
+.brand small{display:block; font-size:11px; color:var(--muted); font-weight:500}
+.crumb{color:var(--muted); font-size:12.5px; margin-left:4px}
+.crumb b{color:var(--text2); font-weight:600}
+.top-right{margin-left:auto; display:flex; align-items:center; gap:8px}
+
+.icon-btn{
+  position:relative; height:34px; min-width:34px; padding:0 10px; border-radius:9px;
+  background:var(--panel2); border:1px solid var(--line); color:var(--text2);
+  display:inline-flex; align-items:center; gap:6px; font-size:12.5px;
+}
+.icon-btn:hover{border-color:var(--line2); color:var(--text)}
+.bell-badge{
+  position:absolute; top:-6px; right:-6px; min-width:18px; height:18px; padding:0 5px;
+  border-radius:9px; background:var(--danger); color:#fff; font-size:11px; font-weight:700;
+  display:grid; place-items:center; border:2px solid var(--panel);
+}
+
+/* ---------- layout ---------- */
+.wrap{max-width:1420px; margin:0 auto; padding:22px 22px 80px}
+.page-head{display:flex; align-items:flex-end; gap:14px; flex-wrap:wrap; margin-bottom:18px}
+.page-head h1{margin:0; font-size:24px; letter-spacing:-.5px}
+.page-head p{margin:4px 0 0; color:var(--muted); font-size:13px}
+.tabs{display:flex; gap:6px; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:5px; margin-bottom:20px; width:fit-content; flex-wrap:wrap}
+.tab{
+  padding:9px 18px; border-radius:8px; border:0; background:transparent; color:var(--muted);
+  font-weight:600; font-size:13.5px; display:flex; align-items:center; gap:7px;
+}
+.tab:hover{color:var(--text2)}
+.tab.active{background:var(--accent); color:#fff; box-shadow:0 2px 10px rgba(59,110,246,.35)}
+.tab .cnt{font-size:11px; padding:1px 6px; border-radius:20px; background:rgba(255,255,255,.16)}
+.tab:not(.active) .cnt{background:var(--panel3); color:var(--muted)}
+
+.card{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:18px}
+.card + .card{margin-top:16px}
+.card-head{display:flex; align-items:center; gap:10px; margin-bottom:14px}
+.card-head h2{margin:0; font-size:15px; letter-spacing:-.2px}
+.card-head .sub{color:var(--muted); font-size:12px}
+.card-head .right{margin-left:auto; display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+.grid{display:grid; gap:16px}
+.g-2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.g-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.g-4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.g-dash{grid-template-columns:minmax(0,1.55fr) minmax(0,1fr)}
+@media(max-width:1080px){.g-3,.g-4,.g-dash,.g-2{grid-template-columns:1fr}}
+
+/* ---------- KPI ---------- */
+.kpi{
+  background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
+  padding:18px 18px 16px; position:relative; overflow:hidden;
+}
+.kpi::before{content:""; position:absolute; top:0; bottom:0; left:0; width:3px; background:var(--accent)}
+.kpi.ok::before{background:var(--ok)} .kpi.warn::before{background:var(--warn)} .kpi.pp::before{background:var(--purple)}
+.kpi .label{color:var(--muted); font-size:12.5px; display:flex; align-items:center; gap:6px}
+.kpi .value{font-size:27px; font-weight:800; letter-spacing:-1px; margin-top:8px}
+.kpi .value small{font-size:14px; font-weight:600; color:var(--text2); margin-left:2px}
+.kpi .foot{margin-top:9px; font-size:12px; color:var(--muted); display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+.bar{height:7px; border-radius:4px; background:var(--panel3); overflow:hidden; display:flex}
+.bar i{display:block; height:100%}
+.b-ok-bg{background:var(--ok)} .b-wait-bg{background:var(--accent)} .b-late-bg{background:var(--danger)}
+
+/* ---------- chips / badges ---------- */
+.badge{display:inline-flex; align-items:center; gap:5px; padding:3px 9px; border-radius:20px; font-size:11.5px; font-weight:700; white-space:nowrap}
+.b-ok{background:var(--ok-soft); color:var(--ok)}
+.b-wait{background:var(--accent-soft); color:var(--accent)}
+.b-soon{background:var(--warn-soft); color:var(--warn)}
+.b-late{background:var(--danger-soft); color:var(--danger)}
+.b-mute{background:var(--panel3); color:var(--muted)}
+.b-pp{background:var(--purple-soft); color:var(--purple)}
+
+/* ---------- table ---------- */
+.tbl-wrap{overflow-x:auto; border:1px solid var(--line); border-radius:var(--radius-sm)}
+table{width:100%; border-collapse:collapse; min-width:760px}
+th{
+  text-align:left; font-size:11.5px; color:var(--muted); font-weight:600; letter-spacing:.3px;
+  padding:11px 12px; background:var(--panel2); border-bottom:1px solid var(--line); white-space:nowrap;
+}
+td{padding:12px; border-bottom:1px solid var(--line); font-size:13px; vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--panel2)}
+td.r,th.r{text-align:right}
+td.c,th.c{text-align:center}
+tfoot td{background:var(--panel2); font-weight:700; border-top:1px solid var(--line2)}
+.co{font-weight:700}
+.co small{display:block; font-weight:500; color:var(--muted); font-size:11.5px; margin-top:2px}
+.empty{padding:44px 20px; text-align:center; color:var(--muted); font-size:13px}
+.empty b{display:block; color:var(--text2); font-size:14px; margin-bottom:6px}
+
+/* ---------- forms ---------- */
+.form-grid{display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px}
+@media(max-width:1080px){.form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:620px){.form-grid{grid-template-columns:1fr}}
+.f{display:flex; flex-direction:column; gap:6px; min-width:0}
+.f.span2{grid-column:span 2} .f.span3{grid-column:span 3} .f.span4{grid-column:span 4}
+@media(max-width:620px){.f.span2,.f.span3,.f.span4{grid-column:span 1}}
+.f label{font-size:12px; color:var(--text2); font-weight:600; display:flex; align-items:center; gap:5px}
+.f label .req{color:var(--danger)}
+.f .hint{font-size:11px; color:var(--muted)}
+input[type=text],input[type=number],input[type=date],input[type=time],select,textarea{
+  background:var(--panel2); border:1px solid var(--line); color:var(--text);
+  border-radius:9px; padding:9px 11px; outline:none; width:100%;
+}
+textarea{resize:vertical; min-height:88px; line-height:1.65}
+input:focus,select:focus,textarea:focus{border-color:var(--accent-line); box-shadow:0 0 0 3px var(--accent-soft)}
+input::placeholder,textarea::placeholder{color:var(--muted)}
+.money-in{position:relative}
+.money-in input{padding-right:32px; text-align:right; font-variant-numeric:tabular-nums; font-weight:700}
+.money-in span{position:absolute; right:11px; top:50%; transform:translateY(-50%); color:var(--muted); font-size:12.5px}
+
+.btn{
+  height:38px; padding:0 18px; border-radius:9px; border:1px solid var(--line);
+  background:var(--panel2); color:var(--text2); font-weight:600; display:inline-flex; align-items:center; gap:7px;
+}
+.btn:hover{border-color:var(--line2); color:var(--text)}
+.btn.primary{background:var(--accent); border-color:var(--accent); color:#fff}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.sm{height:30px; padding:0 11px; font-size:12px; border-radius:7px}
+.btn.danger{color:var(--danger); border-color:var(--danger-soft)}
+.btn.danger:hover{background:var(--danger-soft)}
+.btn.ok{color:var(--ok); border-color:var(--ok-soft)}
+.btn.ok:hover{background:var(--ok-soft)}
+.form-actions{display:flex; gap:8px; align-items:center; margin-top:16px; padding-top:16px; border-top:1px dashed var(--line); flex-wrap:wrap}
+.form-actions .note{color:var(--muted); font-size:12px; margin-right:auto}
+
+.seg{display:flex; border:1px solid var(--line); border-radius:9px; overflow:hidden}
+.seg button{flex:1; height:37px; border:0; background:var(--panel2); color:var(--muted); font-size:12.5px; font-weight:600; border-right:1px solid var(--line)}
+.seg button:last-child{border-right:0}
+.seg button.on{background:var(--accent-soft); color:var(--accent)}
+.checks{display:flex; gap:8px; flex-wrap:wrap; padding-top:3px}
+.chk{
+  display:inline-flex; align-items:center; gap:6px; padding:8px 11px; border-radius:8px;
+  border:1px solid var(--line); background:var(--panel2); font-size:12.5px; color:var(--muted); cursor:pointer; user-select:none;
+}
+.chk.on{border-color:var(--accent-line); background:var(--accent-soft); color:var(--accent)}
+
+/* chips input */
+.chipbox{
+  display:flex; flex-wrap:wrap; gap:6px; align-items:center; min-height:40px;
+  background:var(--panel2); border:1px solid var(--line); border-radius:9px; padding:6px 8px;
+}
+.chipbox:focus-within{border-color:var(--accent-line); box-shadow:0 0 0 3px var(--accent-soft)}
+.chipbox input{border:0; background:transparent; flex:1; min-width:130px; padding:3px; box-shadow:none !important}
+.chip{display:inline-flex; align-items:center; gap:6px; padding:4px 8px; border-radius:7px; background:var(--panel3); font-size:12px; border:1px solid var(--line)}
+.chip.our{border-color:var(--accent-line); color:var(--accent); background:var(--accent-soft)}
+.chip.cli{border-color:rgba(167,139,250,.4); color:var(--purple); background:var(--purple-soft)}
+.chip button{border:0; background:transparent; color:inherit; opacity:.6; padding:0 1px; font-size:13px; line-height:1}
+.chip button:hover{opacity:1}
+
+.ai-row{display:grid; grid-template-columns:minmax(0,1fr) 130px 150px 36px; gap:8px; margin-bottom:8px}
+@media(max-width:700px){.ai-row{grid-template-columns:1fr 1fr}}
+.ai-row .x{border:1px solid var(--line); background:var(--panel2); border-radius:8px; color:var(--muted)}
+.ai-row .x:hover{color:var(--danger); border-color:var(--danger-soft)}
+
+/* ---------- alerts ---------- */
+.alert-panel{
+  position:absolute; top:44px; right:0; width:400px; max-height:520px; overflow:auto;
+  background:var(--panel); border:1px solid var(--line2); border-radius:12px; box-shadow:var(--shadow);
+  padding:8px; display:none; z-index:80;
+}
+.alert-panel.open{display:block}
+.alert-panel h4{margin:8px 10px 10px; font-size:13px; display:flex; align-items:center; gap:8px}
+.alert-panel h4 span{margin-left:auto; font-weight:500; color:var(--muted); font-size:11.5px}
+.al{display:flex; gap:10px; padding:11px; border-radius:10px; align-items:flex-start}
+.al:hover{background:var(--panel2)}
+.al .ic{width:30px; height:30px; border-radius:8px; display:grid; place-items:center; flex:none; font-size:14px}
+.al .t{font-size:13px; font-weight:600}
+.al .d{font-size:12px; color:var(--muted); margin-top:2px}
+.al .when{margin-left:auto; font-size:11px; color:var(--muted); white-space:nowrap; padding-top:2px}
+
+.banner{
+  display:flex; gap:12px; align-items:center; padding:13px 16px; border-radius:12px;
+  border:1px solid var(--warn-soft); background:var(--warn-soft); margin-bottom:16px; font-size:13px; flex-wrap:wrap;
+}
+.banner.danger{border-color:var(--danger-soft); background:var(--danger-soft)}
+.banner .ic{font-size:17px}
+.banner b{color:var(--text)}
+.banner .right{margin-left:auto; display:flex; gap:8px}
+
+/* ---------- meeting cards ---------- */
+.mtg{border:1px solid var(--line); border-radius:12px; background:var(--panel2); overflow:hidden; margin-bottom:12px}
+.mtg-head{display:flex; gap:14px; align-items:center; padding:14px 16px; cursor:pointer}
+.mtg-head:hover{background:var(--panel3)}
+.mtg-date{width:64px; flex:none; text-align:center; border-radius:10px; background:var(--panel); border:1px solid var(--line); padding:7px 0}
+.mtg-date .m{font-size:11px; color:var(--muted)}
+.mtg-date .d{font-size:20px; font-weight:800; letter-spacing:-.5px; line-height:1.15}
+.mtg-date .w{font-size:11px; color:var(--muted)}
+.mtg-main{min-width:0; flex:1}
+.mtg-title{font-weight:700; font-size:14px; display:flex; align-items:center; gap:8px; flex-wrap:wrap}
+.mtg-meta{color:var(--muted); font-size:12.5px; margin-top:5px; display:flex; gap:12px; flex-wrap:wrap}
+.mtg-body{display:none; padding:2px 16px 16px; border-top:1px solid var(--line)}
+.mtg.open .mtg-body{display:block}
+.mtg.open .mtg-head{background:var(--panel3)}
+.rec{margin-top:14px}
+.rec h5{margin:0 0 7px; font-size:12px; color:var(--muted); font-weight:700; letter-spacing:.3px}
+.rec .txt{white-space:pre-wrap; font-size:13px; color:var(--text2); background:var(--panel); border:1px solid var(--line); border-radius:9px; padding:11px 13px; line-height:1.7}
+.ai-list{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:7px}
+.ai-list li{display:flex; gap:10px; align-items:center; background:var(--panel); border:1px solid var(--line); border-radius:9px; padding:9px 12px; font-size:13px}
+.ai-list li.done .task{text-decoration:line-through; color:var(--muted)}
+.ai-list .task{flex:1; min-width:0}
+.ai-list .owner{font-size:11.5px; color:var(--muted)}
+.cbx{width:16px; height:16px; accent-color:var(--accent); cursor:pointer}
+
+/* misc */
+.row{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+.searchbox{position:relative; min-width:200px}
+.searchbox input{padding-left:32px}
+.searchbox::before{content:"🔍"; position:absolute; left:10px; top:50%; transform:translateY(-50%); font-size:12px; opacity:.6}
+.month-nav{display:flex; align-items:center; gap:4px; background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:4px}
+.month-nav button{width:30px; height:30px; border:0; background:transparent; color:var(--text2); border-radius:7px; font-size:15px}
+.month-nav button:hover{background:var(--panel3)}
+.month-nav .lbl{padding:0 10px; font-weight:700; font-size:13.5px; min-width:100px; text-align:center}
+.mini{display:flex; flex-direction:column; gap:9px; max-height:330px; overflow:auto}
+.mini-row{display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid var(--line); border-radius:10px; background:var(--panel2)}
+.mini-row .dt{width:56px; flex:none; text-align:center; font-weight:700; font-size:12px; color:var(--text2)}
+.mini-row .n{flex:1; min-width:0; font-size:13px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.mini-row .a{font-weight:700; font-size:13px}
+.legend{display:flex; gap:14px; flex-wrap:wrap; font-size:11.5px; color:var(--muted); margin-top:10px}
+.legend i{display:inline-block; width:8px; height:8px; border-radius:2px; margin-right:5px}
+/* 목록 인라인 수정 */
+.edit-row td{background:var(--panel3); padding:14px}
+.edit-row:hover td{background:var(--panel3)}
+.edit-wrap{border:1px dashed var(--accent-line); border-radius:12px; padding:16px; background:var(--panel)}
+.edit-title{font-size:13.5px; margin-bottom:14px; display:flex; align-items:center; gap:8px; flex-wrap:wrap}
+.edit-title .hint{font-size:11.5px; color:var(--muted); font-weight:500}
+tr.editing td{box-shadow:inset 0 0 0 1px var(--accent-line)}
+.toast{
+  position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px);
+  background:var(--panel); border:1px solid var(--line2); box-shadow:var(--shadow);
+  padding:12px 20px; border-radius:11px; font-size:13px; font-weight:600; opacity:0;
+  transition:.25s; z-index:200; pointer-events:none;
+}
+.toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+.hl{color:var(--accent)}
+.calgrid{display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:5px; grid-auto-rows:minmax(88px,auto)}
+.calgrid .hd{
+  height:28px; display:flex; align-items:center; justify-content:center;
+  font-size:11.5px; font-weight:700; color:var(--muted); letter-spacing:.5px;
+}
+.calgrid .hd.sun{color:var(--danger)} .calgrid .hd.sat{color:var(--accent)}
+.cell{
+  min-width:0; border:1px solid var(--line); border-radius:8px; background:var(--panel2);
+  padding:6px; font-size:11px; display:flex; flex-direction:column; gap:3px; overflow:hidden;
+}
+.cell.out{background:transparent; border-color:transparent}
+.cell.today{border-color:var(--accent-line); box-shadow:0 0 0 2px var(--accent-soft)}
+.cell .dnum{font-weight:700; color:var(--text2); font-size:11.5px; line-height:1.2; flex:none}
+.cell .dnum.sun{color:var(--danger)} .cell .dnum.sat{color:var(--accent)}
+.cell.today .dnum{color:var(--accent)}
+.cell .ev{border-radius:4px; padding:2px 5px; font-size:10.5px; line-height:1.45; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:none; cursor:pointer}
+.cell .ev:hover{filter:brightness(1.25); box-shadow:0 0 0 1px currentColor}
+.cell .more{font-size:10px; color:var(--muted); padding-left:3px; flex:none; cursor:pointer}
+.cell .more:hover{color:var(--accent); text-decoration:underline}
+.cell .dnum{cursor:pointer}
+.cell.out .dnum{cursor:default}
+.mini-row[data-ev]{cursor:pointer}
+.mini-row[data-ev]:hover{border-color:var(--accent-line); background:var(--panel3)}
+
+/* ---------- 모달 ---------- */
+.modal-back{
+  position:fixed; inset:0; background:rgba(3,6,14,.62); backdrop-filter:blur(2px);
+  display:none; align-items:flex-start; justify-content:center; z-index:150; padding:60px 16px 40px; overflow:auto;
+}
+.modal-back.open{display:flex}
+.modal{
+  width:100%; max-width:660px; background:var(--panel); border:1px solid var(--line2);
+  border-radius:16px; box-shadow:var(--shadow); overflow:hidden; animation:pop .16s ease-out;
+}
+@keyframes pop{from{transform:translateY(-8px); opacity:.4} to{transform:none; opacity:1}}
+.modal-head{display:flex; align-items:center; gap:10px; padding:16px 18px; border-bottom:1px solid var(--line); background:var(--panel2); flex-wrap:wrap}
+.modal-head .ttl{font-size:16px; font-weight:800; letter-spacing:-.3px}
+.modal-head .x{margin-left:auto; width:32px; height:32px; border-radius:8px; border:1px solid var(--line); background:var(--panel); color:var(--muted); font-size:15px}
+.modal-head .x:hover{color:var(--danger); border-color:var(--danger-soft)}
+.modal-body{padding:18px; max-height:64vh; overflow:auto}
+.modal-foot{display:flex; gap:8px; align-items:center; padding:14px 18px; border-top:1px solid var(--line); background:var(--panel2); flex-wrap:wrap}
+.modal-foot .note{color:var(--muted); font-size:11.5px; margin-right:auto}
+.dl{display:grid; grid-template-columns:118px minmax(0,1fr); gap:1px; background:var(--line); border:1px solid var(--line); border-radius:10px; overflow:hidden}
+.dl dt{background:var(--panel2); padding:10px 12px; font-size:12px; color:var(--muted); font-weight:600}
+.dl dd{background:var(--panel); padding:10px 12px; margin:0; font-size:13px; word-break:break-all}
+.dl dd b{font-weight:700}
+.modal .form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+@media(max-width:560px){.modal .form-grid{grid-template-columns:1fr} .dl{grid-template-columns:96px minmax(0,1fr)}}
+.day-item{display:flex; gap:10px; align-items:center; padding:11px 13px; border:1px solid var(--line); border-radius:10px; background:var(--panel2); cursor:pointer; margin-bottom:8px}
+.day-item:hover{border-color:var(--accent-line)}
+.day-item .n{flex:1; min-width:0; font-weight:600; font-size:13px}
+.day-item .n small{display:block; font-weight:500; color:var(--muted); font-size:11.5px; margin-top:2px}
+.ev.pay{background:var(--accent-soft); color:var(--accent)}
+.ev.paid{background:var(--ok-soft); color:var(--ok)}
+.ev.late{background:var(--danger-soft); color:var(--danger)}
+.ev.mt{background:var(--purple-soft); color:var(--purple)}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="logo">E</div>
+    <div>EKDLABS ERP<small>팀장 · master01</small></div>
+  </div>
+  <div class="crumb">운영 관리 &nbsp;›&nbsp; <b>계산서/입출금 매칭</b> &nbsp;›&nbsp; <b class="hl">입금·미팅 관리</b></div>
+  <div class="top-right">
+    <div style="position:relative">
+      <button class="icon-btn" id="bellBtn">🔔 알림 <span class="bell-badge" id="bellCnt">0</span></button>
+      <div class="alert-panel" id="alertPanel"></div>
+    </div>
+    <button class="icon-btn" id="exportBtn">⬇ 백업</button>
+    <button class="icon-btn" id="themeBtn">🌙 Dark</button>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="page-head">
+    <div>
+      <h1>입금 · 미팅 관리</h1>
+      <p>업체별 매월 입금 예정일·요청 금액과 미팅 일정/회의록을 한 화면에서 관리합니다. <b style="color:var(--warn)">데모용 가상 데이터</b>입니다.</p>
+    </div>
+    <div style="margin-left:auto" class="row">
+      <div class="month-nav">
+        <button id="mPrev">‹</button>
+        <div class="lbl" id="mLabel">–</div>
+        <button id="mNext">›</button>
+      </div>
+      <button class="btn sm" id="mToday">이번 달</button>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" data-view="dash">📊 월간 요약 대시보드</button>
+    <button class="tab" data-view="pay">💰 입금 관리 <span class="cnt" id="tabPayCnt">0</span></button>
+    <button class="tab" data-view="meet">🗓 미팅 일정 <span class="cnt" id="tabMeetCnt">0</span></button>
+  </div>
+
+  <section id="view-dash"></section>
+  <section id="view-pay" style="display:none"></section>
+  <section id="view-meet" style="display:none"></section>
+</div>
+
+<div class="modal-back" id="modalRoot"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* =====================================================================
+   EKDLABS ERP - 입금/미팅 관리 프로토타입
+   저장소: localStorage ("ekd_erp_addon_v1")  ·  서버 연동 없음
+   ===================================================================== */
+
+const KEY = 'ekd_erp_addon_v1';
+const WEEK = ['일','월','화','수','목','금','토'];
+
+/* ---------- 기본 시드 데이터 (현재 ERP 화면의 고정 입금일 메모 기준) ---------- */
+function seed(){
+  const S = (name, day, amount, owner, memo, ch) => ({
+    id: uid(), name, dueDay: day, amount, owner: owner || '',
+    method: '계좌이체', taxDay: '', leads: [3,1,0], channels: ch || ['사내알림'],
+    memo: memo || '', active: true
+  });
+  const schedules = [
+    S('서울드림의원', 5, 2200000, '홍길동', '전월 말일~5일 사이 입금. 세금계산서 말일 발행.'),
+    S('하나마케팅(A지점)', 10, 4400000, '김민수', '월초 계산서 발행 / 입금 지연 잦음 → D-3 사전 안내 필수'),
+    S('하나마케팅(B지점)', 10, 7150000, '김민수', '월초 계산서 발행 / 입금 지연 잦음'),
+    S('미소플러스치과', 1, 1870000, '홍길동', '매월 1일 자동이체'),
+    S('온누리의원', 5, 1650000, '이영희', ''),
+    S('새봄의원', 8, 1760000, '이영희', '입금 확인 지연 → 담당자 유선 확인 필요'),
+    S('한결의원', 21, 5500000, '홍길동', '대표 직접 확인 후 입금'),
+    S('아침햇살의원', 25, 2200000, '김민수', '')
+  ];
+  // 데모용: 이번 달 예정일이 지난 건 중 일부를 입금완료 상태로 채워 둔다(새봄·한결의원은 연체로 남김)
+  const payments = {}, t = today(), ym = ymKey(t);
+  schedules.forEach(s=>{
+    const due = dueDateOf(s, t);
+    if(diffDays(due, t) < 0 && ['새봄의원','한결의원'].indexOf(s.name) === -1){
+      payments[s.id + '|' + ym] = {paidAt: fmtISO(due), amount: s.amount};
+    }
+  });
+  return {schedules, payments, meetings: []};   // payments: "scheduleId|YYYY-MM" -> {paidAt, amount}
+}
+
+/* ---------- state ---------- */
+let DB = load();
+let view = 'dash';
+let cursor = startOfMonth(new Date());          // 대시보드/목록 기준 월
+let payEdit = null, meetEdit = null;
+let editForm = null;            // 목록에서 인라인 수정 중인 업체의 임시 값
+let modal = null;               // {kind:'pay'|'meet'|'day', id|date, edit:bool}
+let mForm = null;               // 모달 안에서 수정 중인 임시 값
+let payFilter = {q:'', status:'all', sort:'due'};
+let meetFilter = {q:'', scope:'upcoming'};
+let form = {leads:[3,1,0], channels:['사내알림'], ours:[], clients:[], items:[]};
+
+function load(){
+  try{
+    const raw = localStorage.getItem(KEY);
+    if(raw) return JSON.parse(raw);
+  }catch(e){}
+  const s = seed(); localStorage.setItem(KEY, JSON.stringify(s)); return s;
+}
+function save(){ localStorage.setItem(KEY, JSON.stringify(DB)); }
+function uid(){ return Math.random().toString(36).slice(2,10); }
+
+/* ---------- date/number utils ---------- */
+function startOfMonth(d){ return new Date(d.getFullYear(), d.getMonth(), 1); }
+function ymKey(d){ return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0'); }
+function lastDay(y,m){ return new Date(y, m+1, 0).getDate(); }
+function today(){ const t=new Date(); return new Date(t.getFullYear(),t.getMonth(),t.getDate()); }
+function dOnly(d){ return new Date(d.getFullYear(),d.getMonth(),d.getDate()); }
+function diffDays(a,b){ return Math.round((dOnly(a)-dOnly(b))/86400000); }
+function fmtDate(d){ return (d.getMonth()+1)+'월 '+d.getDate()+'일('+WEEK[d.getDay()]+')'; }
+function fmtISO(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function won(n){ return (Number(n)||0).toLocaleString('ko-KR'); }
+function manwon(n){
+  n = Number(n)||0;
+  if(n >= 100000000) return (n/100000000).toFixed(n%100000000===0?0:1)+'억';
+  if(n >= 10000) return Math.round(n/10000).toLocaleString('ko-KR')+'만';
+  return n.toLocaleString('ko-KR');
+}
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function dueDateOf(sc, base){
+  const y = base.getFullYear(), m = base.getMonth();
+  const day = sc.dueDay === 'EOM' ? lastDay(y,m) : Math.min(Number(sc.dueDay)||1, lastDay(y,m));
+  return new Date(y, m, day);
+}
+function dueLabel(sc){ return sc.dueDay === 'EOM' ? '매월 말일' : '매월 ' + sc.dueDay + '일'; }
+function payKey(sc, base){ return sc.id + '|' + ymKey(base); }
+function isPaid(sc, base){ return !!DB.payments[payKey(sc, base)]; }
+
+/* 상태: paid / late / soon / wait  (soon = 알림 리드타임 안으로 들어옴) */
+function statusOf(sc, base){
+  if(isPaid(sc, base)) return 'paid';
+  const due = dueDateOf(sc, base), t = today();
+  const d = diffDays(due, t);
+  if(d < 0) return 'late';
+  const lead = Math.max.apply(null, (sc.leads && sc.leads.length ? sc.leads : [0]));
+  return d <= lead ? 'soon' : 'wait';
+}
+const STATUS_META = {
+  paid:{cls:'b-ok',  txt:'입금완료'},
+  late:{cls:'b-late',txt:'미입금(연체)'},
+  soon:{cls:'b-soon',txt:'입금임박'},
+  wait:{cls:'b-wait',txt:'입금대기'}
+};
+function ddayText(due){
+  const d = diffDays(due, today());
+  if(d === 0) return 'D-DAY';
+  return d > 0 ? 'D-'+d : 'D+'+Math.abs(d);
+}
+
+/* ---------- 월간 집계 ---------- */
+function summary(base){
+  const act = DB.schedules.filter(s=>s.active);
+  let planned=0, paid=0, lateAmt=0, waitAmt=0, cPaid=0, cLate=0, cWait=0;
+  act.forEach(s=>{
+    const rec = DB.payments[payKey(s, base)];
+    planned += Number(s.amount)||0;
+    if(rec){ paid += Number(rec.amount)||Number(s.amount)||0; cPaid++; }
+    else if(statusOf(s, base)==='late'){ lateAmt += Number(s.amount)||0; cLate++; }
+    else { waitAmt += Number(s.amount)||0; cWait++; }
+  });
+  return {planned, paid, unpaid:planned-paid, lateAmt, waitAmt, cPaid, cLate, cWait, total:act.length,
+          rate: planned ? Math.round(paid/planned*100) : 0};
+}
+
+/* ---------- 알림 계산 ---------- */
+function buildAlerts(){
+  const t = today(), out = [];
+  DB.schedules.filter(s=>s.active).forEach(s=>{
+    [0,1].forEach(off=>{                      // 이번 달 + 다음 달 예정분
+      const base = new Date(t.getFullYear(), t.getMonth()+off, 1);
+      if(isPaid(s, base)) return;
+      const due = dueDateOf(s, base), d = diffDays(due, t);
+      const leads = (s.leads&&s.leads.length)?s.leads:[0];
+      if(d < 0 && off === 0){
+        out.push({type:'late', sort:d, icon:'⚠️', cls:'b-late',
+          title: s.name + ' 입금 지연 ' + Math.abs(d) + '일차',
+          desc: won(s.amount)+'원 · 예정일 '+fmtDate(due)+(s.owner?' · 담당 '+s.owner:''), when:'D+'+Math.abs(d)});
+      } else if(d >= 0 && leads.indexOf(d) > -1){
+        out.push({type:'pay', sort:d, icon:'💰', cls: d===0?'b-soon':'b-wait',
+          title: s.name + (d===0 ? ' 오늘 입금 예정일' : ' 입금 ' + d + '일 전'),
+          desc: won(s.amount)+'원 입금 요청 · '+fmtDate(due)+(s.channels&&s.channels.length?' · '+s.channels.join('/'):''),
+          when: d===0?'D-DAY':'D-'+d});
+      }
+    });
+  });
+  DB.meetings.forEach(m=>{
+    const dt = new Date(m.date + 'T' + (m.time||'09:00'));
+    const d = diffDays(dt, t);
+    if(m.remind !== false && (d === 1 || d === 0)){
+      out.push({type:'meet', sort:d-0.5, icon:'🗓', cls:'b-pp',
+        title: m.company + ' 미팅 ' + (d===1?'내일':'오늘') + ' ' + (m.time||''),
+        desc: (m.place||m.mode||'') + ' · 참석 ' + [...(m.ours||[]),...(m.clients||[])].length + '명' + (m.agenda?' · '+m.agenda:''),
+        when: d===1?'D-1':'D-DAY'});
+    }
+  });
+  return out.sort((a,b)=>a.sort-b.sort);
+}
+
+/* =====================================================================
+   RENDER : 월간 요약 대시보드
+   ===================================================================== */
+function renderDash(){
+  const s = summary(cursor);
+  const act = DB.schedules.filter(x=>x.active);
+  const alerts = buildAlerts();
+  const late = act.filter(x=>statusOf(x,cursor)==='late');
+  const rows = act.map(x=>({sc:x, due:dueDateOf(x,cursor), st:statusOf(x,cursor)}))
+                  .sort((a,b)=>a.due-b.due);
+  const upcoming = rows.filter(r=>r.st!=='paid');
+  const t = today();
+  const mtgs = DB.meetings.slice().sort((a,b)=> (a.date+a.time).localeCompare(b.date+b.time))
+                 .filter(m=> diffDays(new Date(m.date+'T00:00'), t) >= 0).slice(0,5);
+
+  const pct = v => s.planned ? (v/s.planned*100) : 0;
+
+  let bannerHTML = '';
+  if(late.length){
+    bannerHTML = '<div class="banner danger"><span class="ic">⚠️</span>'
+      + '<div><b>미입금 ' + late.length + '건 · ' + won(s.lateAmt) + '원</b> — 예정일이 지난 업체가 있습니다. 담당자 확인이 필요합니다.</div>'
+      + '<div class="right"><button class="btn sm danger" data-goto="pay" data-status="late">미입금 목록 보기</button></div></div>';
+  } else if(alerts.length){
+    bannerHTML = '<div class="banner"><span class="ic">🔔</span>'
+      + '<div><b>오늘의 알림 ' + alerts.length + '건</b> — 입금 예정 / 미팅 전날 알림이 있습니다.</div>'
+      + '<div class="right"><button class="btn sm" id="openBell2">알림 보기</button></div></div>';
+  }
+
+  document.getElementById('view-dash').innerHTML = bannerHTML + `
+  <div class="grid g-4" style="margin-bottom:16px">
+    <div class="kpi">
+      <div class="label">📌 이번 달 총 입금 예정액</div>
+      <div class="value num">${won(s.planned)}<small>원</small></div>
+      <div class="foot">활성 업체 ${s.total}곳 · 평균 ${won(Math.round(s.planned/(s.total||1)))}원</div>
+    </div>
+    <div class="kpi ok">
+      <div class="label">✅ 입금 완료액</div>
+      <div class="value num" style="color:var(--ok)">${won(s.paid)}<small>원</small></div>
+      <div class="foot">${s.cPaid}건 완료 · 달성률 <b style="color:var(--ok)">${s.rate}%</b></div>
+    </div>
+    <div class="kpi warn">
+      <div class="label">🕗 미입금액</div>
+      <div class="value num" style="color:var(--warn)">${won(s.unpaid)}<small>원</small></div>
+      <div class="foot">대기 ${s.cWait}건 · <span style="color:var(--danger)">연체 ${s.cLate}건</span></div>
+    </div>
+    <div class="kpi pp">
+      <div class="label">📈 수금 진행률</div>
+      <div class="value num">${s.rate}<small>%</small></div>
+      <div class="bar" style="margin-top:10px">
+        <i class="b-ok-bg" style="width:${pct(s.paid)}%"></i>
+        <i class="b-late-bg" style="width:${pct(s.lateAmt)}%"></i>
+        <i class="b-wait-bg" style="width:${pct(s.waitAmt)}%"></i>
+      </div>
+      <div class="legend">
+        <span><i class="b-ok-bg"></i>완료 ${manwon(s.paid)}</span>
+        <span><i class="b-late-bg"></i>연체 ${manwon(s.lateAmt)}</span>
+        <span><i class="b-wait-bg"></i>대기 ${manwon(s.waitAmt)}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid g-dash">
+    <div>
+      <div class="card">
+        <div class="card-head">
+          <h2>업체별 입금 현황</h2>
+          <span class="sub">${ymKey(cursor)} 기준 · 입금일 순</span>
+          <div class="right"><button class="btn sm" data-goto="pay">전체 관리 →</button></div>
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr>
+              <th style="width:30%">업체명</th><th>입금 예정일</th><th class="c">D-day</th>
+              <th class="r">요청 금액</th><th class="c">상태</th><th class="c">처리</th>
+            </tr></thead>
+            <tbody>
+              ${rows.length ? rows.map(r=>{
+                const m = STATUS_META[r.st];
+                return `<tr>
+                  <td class="co">${esc(r.sc.name)}<small>${esc(r.sc.owner||'담당 미지정')} · ${dueLabel(r.sc)}</small></td>
+                  <td class="num">${fmtDate(r.due)}</td>
+                  <td class="c num" style="color:${r.st==='late'?'var(--danger)':r.st==='soon'?'var(--warn)':'var(--muted)'};font-weight:700">
+                    ${r.st==='paid'?'—':ddayText(r.due)}</td>
+                  <td class="r num" style="font-weight:700">${won(r.sc.amount)}원</td>
+                  <td class="c"><span class="badge ${m.cls}">${m.txt}</span></td>
+                  <td class="c">${r.st==='paid'
+                    ? '<button class="btn sm" data-unpay="'+r.sc.id+'">취소</button>'
+                    : '<button class="btn sm ok" data-pay="'+r.sc.id+'">입금확인</button>'}</td>
+                </tr>`;
+              }).join('') : '<tr><td colspan="6" class="empty"><b>등록된 입금 일정이 없습니다</b>입금 관리 탭에서 업체를 등록해 주세요.</td></tr>'}
+            </tbody>
+            <tfoot><tr>
+              <td colspan="3">합계 (${rows.length}건)</td>
+              <td class="r num">${won(s.planned)}원</td>
+              <td colspan="2" class="c num">완료 ${won(s.paid)}원</td>
+            </tr></tfoot>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>${cursor.getMonth()+1}월 캘린더</h2><span class="sub">입금 예정 · 미팅 일정</span></div>
+        ${calendarHTML(cursor)}
+        <div class="legend">
+          <span><i class="b-wait-bg"></i>입금예정</span>
+          <span><i class="b-ok-bg"></i>입금완료</span>
+          <span><i class="b-late-bg"></i>연체</span>
+          <span><i style="background:var(--purple)"></i>미팅</span>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="card">
+        <div class="card-head"><h2>입금 예정 알림</h2><span class="sub">미완료 순</span></div>
+        <div class="mini">
+          ${upcoming.length ? upcoming.map(r=>`
+            <div class="mini-row" data-ev="pay|${r.sc.id}">
+              <div class="dt">${(r.due.getMonth()+1)}/${r.due.getDate()}</div>
+              <div class="n">${esc(r.sc.name)}</div>
+              <div class="a num">${manwon(r.sc.amount)}</div>
+              <span class="badge ${STATUS_META[r.st].cls}">${r.st==='late'?ddayText(r.due):ddayText(r.due)}</span>
+            </div>`).join('')
+            : '<div class="empty">이번 달 입금이 모두 완료되었습니다 🎉</div>'}
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>다가오는 미팅</h2>
+          <div class="right"><button class="btn sm" data-goto="meet">일정 관리 →</button></div>
+        </div>
+        <div class="mini">
+          ${mtgs.length ? mtgs.map(m=>{
+            const dt = new Date(m.date+'T00:00'); const dd = diffDays(dt, t);
+            return `<div class="mini-row" data-ev="meet|${m.id}">
+              <div class="dt">${(dt.getMonth()+1)}/${dt.getDate()}</div>
+              <div class="n">${esc(m.company)}<div style="font-weight:500;color:var(--muted);font-size:11.5px">${esc(m.time||'')} · ${esc(m.mode||'')} ${esc(m.place||'')}</div></div>
+              <span class="badge ${dd<=1?'b-soon':'b-pp'}">${dd===0?'오늘':dd===1?'내일':'D-'+dd}</span>
+            </div>`;
+          }).join('') : '<div class="empty"><b>예정된 미팅이 없습니다</b>미팅 일정 탭에서 등록해 주세요.</div>'}
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>담당자별 수금 현황</h2></div>
+        <div class="mini">${ownerHTML(cursor)}</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function ownerHTML(base){
+  const map = {};
+  DB.schedules.filter(s=>s.active).forEach(s=>{
+    const k = s.owner || '미지정';
+    map[k] = map[k] || {plan:0, paid:0, n:0};
+    map[k].plan += Number(s.amount)||0; map[k].n++;
+    if(isPaid(s, base)) map[k].paid += Number(s.amount)||0;
+  });
+  const keys = Object.keys(map);
+  if(!keys.length) return '<div class="empty">데이터 없음</div>';
+  return keys.map(k=>{
+    const v = map[k], r = v.plan ? Math.round(v.paid/v.plan*100) : 0;
+    return `<div class="mini-row" style="flex-direction:column;align-items:stretch;gap:7px">
+      <div class="row"><b style="font-size:13px">${esc(k)}</b>
+        <span class="badge b-mute">${v.n}개사</span>
+        <span style="margin-left:auto" class="num" style="font-size:12px">${manwon(v.paid)} / ${manwon(v.plan)}</span></div>
+      <div class="bar"><i class="b-ok-bg" style="width:${r}%"></i></div>
+    </div>`;
+  }).join('');
+}
+
+function calendarHTML(base){
+  const y = base.getFullYear(), m = base.getMonth();
+  const first = new Date(y,m,1), start = first.getDay(), ld = lastDay(y,m);
+  const t = today();
+  const evByDay = {};
+  DB.schedules.filter(s=>s.active).forEach(s=>{
+    const d = dueDateOf(s, base).getDate(), st = statusOf(s, base);
+    (evByDay[d] = evByDay[d] || []).push({cls: st==='paid'?'paid':st==='late'?'late':'pay',
+      txt:'💰 '+s.name+' '+manwon(s.amount), kind:'pay', id:s.id});
+  });
+  DB.meetings.forEach(mt=>{
+    const d = new Date(mt.date+'T00:00');
+    if(d.getFullYear()===y && d.getMonth()===m)
+      (evByDay[d.getDate()] = evByDay[d.getDate()] || []).push({cls:'mt',
+        txt:'🗓 '+(mt.time||'')+' '+mt.company, kind:'meet', id:mt.id});
+  });
+  const MAX_EV = 2;                                  // 셀당 표시 개수(초과분은 +N건) → 줄 높이 균일 유지
+  let cells = '';
+  for(let i=0;i<start;i++) cells += '<div class="cell out"></div>';   // 1일 앞 빈칸
+  for(let d=1; d<=ld; d++){
+    const isT = (t.getFullYear()===y && t.getMonth()===m && t.getDate()===d);
+    const dow = new Date(y,m,d).getDay();
+    const all = evByDay[d] || [];
+    const iso = fmtISO(new Date(y,m,d));
+    const evs = all.slice(0,MAX_EV).map(e=>
+        `<div class="ev ${e.cls}" data-ev="${e.kind}|${e.id}" title="${esc(e.txt)} — 클릭하면 상세보기">${esc(e.txt)}</div>`).join('')
+      + (all.length > MAX_EV ? `<div class="more" data-day="${iso}">+${all.length-MAX_EV}건 더보기</div>` : '');
+    cells += `<div class="cell${isT?' today':''}">`
+      + `<div class="dnum${dow===0?' sun':dow===6?' sat':''}" data-day="${iso}" title="${d}일 일정 전체보기">${d}</div>${evs}</div>`;
+  }
+  const tail = (7 - ((start + ld) % 7)) % 7;                          // 마지막 주 빈칸 채우기
+  for(let i=0;i<tail;i++) cells += '<div class="cell out"></div>';
+  const head = WEEK.map((w,i)=>`<div class="hd${i===0?' sun':i===6?' sat':''}">${w}</div>`).join('');
+  return '<div class="calgrid">' + head + cells + '</div>';
+}
+
+/* =====================================================================
+   RENDER : 입금 관리
+   ===================================================================== */
+function renderPay(){
+  const e = null;                       // 상단 폼은 신규 등록 전용 (수정은 목록에서 인라인 편집)
+  const leads = form.leads, chans = form.channels;
+  const LEADS = [{v:7,t:'7일 전'},{v:3,t:'3일 전'},{v:1,t:'1일 전'},{v:0,t:'당일'}];
+  const CHANS = ['사내알림','이메일','카카오톡','SMS'];
+
+  let list = DB.schedules.slice();
+  if(payFilter.q) list = list.filter(s=>(s.name+s.owner+s.memo).toLowerCase().includes(payFilter.q.toLowerCase()));
+  if(payFilter.status!=='all') list = list.filter(s=> s.active && statusOf(s,cursor)===payFilter.status);
+  list.sort((a,b)=>{
+    if(payFilter.sort==='amount') return (b.amount||0)-(a.amount||0);
+    if(payFilter.sort==='name') return a.name.localeCompare(b.name,'ko');
+    return dueDateOf(a,cursor) - dueDateOf(b,cursor);
+  });
+  const sum = list.filter(s=>s.active).reduce((a,s)=>a+(Number(s.amount)||0),0);
+
+  document.getElementById('view-pay').innerHTML = `
+  <div class="card">
+    <div class="card-head">
+      <h2>${e ? '✏️ 입금 일정 수정' : '➕ 업체별 입금 일정 등록'}</h2>
+      <span class="sub">매월 반복되는 입금 예정일과 요청 금액, 알림 시점을 설정합니다.</span>
+    </div>
+    <div class="form-grid">
+      <div class="f">
+        <label>업체명 <span class="req">*</span></label>
+        <input type="text" id="p_name" placeholder="예) 서울드림의원" value="${esc(e?e.name:'')}">
+      </div>
+      <div class="f">
+        <label>매월 입금일 <span class="req">*</span></label>
+        <select id="p_day">
+          ${Array.from({length:31},(_,i)=>i+1).map(d=>`<option value="${d}" ${e&&String(e.dueDay)===String(d)?'selected':''}>매월 ${d}일</option>`).join('')}
+          <option value="EOM" ${e&&e.dueDay==='EOM'?'selected':''}>매월 말일</option>
+        </select>
+        <div class="hint">해당 월에 없는 날짜(31일 등)는 자동으로 말일 처리됩니다.</div>
+      </div>
+      <div class="f">
+        <label>입금 요청 금액 <span class="req">*</span></label>
+        <div class="money-in"><input type="text" id="p_amt" class="money" placeholder="0" value="${e?won(e.amount):''}"><span>원</span></div>
+        <div class="hint" id="p_amt_hint">${e?manwon(e.amount)+'원':'부가세 포함 금액 기준'}</div>
+      </div>
+      <div class="f">
+        <label>담당자</label>
+        <input type="text" id="p_owner" placeholder="예) 홍길동" value="${esc(e?e.owner:'')}">
+      </div>
+
+      <div class="f">
+        <label>결제 수단</label>
+        <select id="p_method">
+          ${['계좌이체','자동이체','카드결제','현금','기타'].map(v=>`<option ${e&&e.method===v?'selected':''}>${v}</option>`).join('')}
+        </select>
+      </div>
+      <div class="f">
+        <label>세금계산서 발행일</label>
+        <select id="p_tax">
+          <option value="">선택 안 함</option>
+          <option value="말일" ${e&&e.taxDay==='말일'?'selected':''}>전월 말일 발행</option>
+          <option value="월초" ${e&&e.taxDay==='월초'?'selected':''}>당월 초 발행</option>
+          <option value="입금일" ${e&&e.taxDay==='입금일'?'selected':''}>입금일 당일 발행</option>
+        </select>
+      </div>
+      <div class="f span2">
+        <label>알림 시점 <span class="hint">(복수 선택 · 담당자에게 자동 발송)</span></label>
+        <div class="checks" id="p_leads">
+          ${LEADS.map(l=>`<div class="chk ${leads.indexOf(l.v)>-1?'on':''}" data-lead="${l.v}">${leads.indexOf(l.v)>-1?'☑':'☐'} 입금 ${l.t}</div>`).join('')}
+        </div>
+      </div>
+
+      <div class="f span2">
+        <label>알림 채널</label>
+        <div class="checks" id="p_chans">
+          ${CHANS.map(c=>`<div class="chk ${chans.indexOf(c)>-1?'on':''}" data-chan="${c}">${chans.indexOf(c)>-1?'☑':'☐'} ${c}</div>`).join('')}
+        </div>
+      </div>
+      <div class="f span2">
+        <label>메모 <span class="hint">(입금 조건, 지연 이력 등)</span></label>
+        <input type="text" id="p_memo" placeholder="예) 월초 계산서 발행 · 입금 지연 잦음 → D-3 사전 안내" value="${esc(e?e.memo:'')}">
+      </div>
+    </div>
+    <div class="form-actions">
+      <div class="note">* 표시는 필수 입력 항목입니다. 등록 시 매월 자동으로 예정 건이 생성됩니다.</div>
+      ${e ? '<button class="btn" id="p_cancel">취소</button>' : ''}
+      <button class="btn primary" id="p_submit">${e?'수정 저장':'입금 일정 등록'}</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <h2>입금 일정 목록</h2>
+      <span class="sub">${ymKey(cursor)} 기준 상태 · 총 ${list.length}건 / ${won(sum)}원</span>
+      <div class="right">
+        <div class="searchbox"><input type="text" id="p_q" placeholder="업체·담당자 검색" value="${esc(payFilter.q)}"></div>
+        <select id="p_status" style="width:auto">
+          <option value="all" ${payFilter.status==='all'?'selected':''}>전체 상태</option>
+          <option value="wait" ${payFilter.status==='wait'?'selected':''}>입금대기</option>
+          <option value="soon" ${payFilter.status==='soon'?'selected':''}>입금임박</option>
+          <option value="late" ${payFilter.status==='late'?'selected':''}>미입금(연체)</option>
+          <option value="paid" ${payFilter.status==='paid'?'selected':''}>입금완료</option>
+        </select>
+        <select id="p_sort" style="width:auto">
+          <option value="due" ${payFilter.sort==='due'?'selected':''}>입금일 순</option>
+          <option value="amount" ${payFilter.sort==='amount'?'selected':''}>금액 높은 순</option>
+          <option value="name" ${payFilter.sort==='name'?'selected':''}>업체명 순</option>
+        </select>
+      </div>
+    </div>
+    <div class="tbl-wrap">
+      <table style="min-width:1000px">
+        <thead><tr>
+          <th style="width:24%">업체명 / 메모</th><th>입금일</th><th class="c">D-day</th><th class="r">요청 금액</th>
+          <th>담당자</th><th>알림</th><th class="c">상태</th><th class="c" style="width:170px">관리</th>
+        </tr></thead>
+        <tbody>
+        ${list.length ? list.map(s=>{
+          if(payEdit === s.id) return editorRow(s);
+          const due = dueDateOf(s,cursor), st = statusOf(s,cursor), m = STATUS_META[st];
+          const rec = DB.payments[payKey(s,cursor)];
+          return `<tr style="${s.active?'':'opacity:.45'}">
+            <td class="co">${esc(s.name)}${s.active?'':' <span class="badge b-mute">중지</span>'}
+              <small>${esc(s.memo||'—')}</small></td>
+            <td class="num">${dueLabel(s)}<br><span style="color:var(--muted);font-size:11.5px">${fmtDate(due)}</span></td>
+            <td class="c num" style="font-weight:700;color:${st==='late'?'var(--danger)':st==='soon'?'var(--warn)':'var(--muted)'}">${st==='paid'?'완료':ddayText(due)}</td>
+            <td class="r num" style="font-weight:700">${won(s.amount)}원<br><span style="color:var(--muted);font-weight:500;font-size:11.5px">${esc(s.method||'')}</span></td>
+            <td>${esc(s.owner||'—')}</td>
+            <td><span style="font-size:11.5px;color:var(--muted)">${(s.leads||[]).map(l=>l===0?'당일':'D-'+l).join(', ')||'—'}<br>${(s.channels||[]).join('/')||'—'}</span></td>
+            <td class="c"><span class="badge ${m.cls}">${m.txt}</span>${rec?'<div style="font-size:11px;color:var(--muted);margin-top:4px">'+rec.paidAt+'</div>':''}</td>
+            <td class="c">
+              ${st==='paid'
+                ? '<button class="btn sm" data-unpay="'+s.id+'">입금취소</button>'
+                : '<button class="btn sm ok" data-pay="'+s.id+'">입금확인</button>'}
+              <button class="btn sm" data-edit="${s.id}">✏️ 수정</button>
+              <button class="btn sm danger" data-del="${s.id}">삭제</button>
+            </td>
+          </tr>`;
+        }).join('') : '<tr><td colspan="8" class="empty"><b>조건에 맞는 입금 일정이 없습니다</b>위 폼에서 업체를 등록하거나 필터를 변경해 보세요.</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+/* ---------- 목록 인라인 수정 행 ---------- */
+function editorRow(s){
+  const f = editForm || s;
+  const LEADS = [{v:7,t:'7일 전'},{v:3,t:'3일 전'},{v:1,t:'1일 전'},{v:0,t:'당일'}];
+  const CHANS = ['사내알림','이메일','카카오톡','SMS'];
+  const el = f.leads || [], ch = f.channels || [];
+  return `<tr class="edit-row"><td colspan="8">
+    <div class="edit-wrap">
+      <div class="edit-title">✏️ <b>${esc(s.name)}</b> 정보 수정
+        <span class="hint">— 값을 바꾼 뒤 [수정 저장]을 눌러야 반영됩니다</span>
+        <span class="badge b-mute" style="margin-left:auto">등록 항목 전체 수정 가능</span>
+      </div>
+      <div class="form-grid">
+        <div class="f">
+          <label>업체명 <span class="req">*</span></label>
+          <input type="text" id="e_name" value="${esc(f.name)}">
+        </div>
+        <div class="f">
+          <label>매월 입금일 <span class="req">*</span></label>
+          <select id="e_day">
+            ${Array.from({length:31},(_,i)=>i+1).map(d=>`<option value="${d}" ${String(f.dueDay)===String(d)?'selected':''}>매월 ${d}일</option>`).join('')}
+            <option value="EOM" ${f.dueDay==='EOM'?'selected':''}>매월 말일</option>
+          </select>
+        </div>
+        <div class="f">
+          <label>입금 요청 금액 <span class="req">*</span></label>
+          <div class="money-in"><input type="text" id="e_amt" class="money" value="${won(f.amount)}"><span>원</span></div>
+          <div class="hint">${manwon(f.amount)}원</div>
+        </div>
+        <div class="f">
+          <label>담당자</label>
+          <input type="text" id="e_owner" value="${esc(f.owner||'')}" placeholder="예) 홍길동">
+        </div>
+
+        <div class="f">
+          <label>결제 수단</label>
+          <select id="e_method">${['계좌이체','자동이체','카드결제','현금','기타'].map(v=>`<option ${f.method===v?'selected':''}>${v}</option>`).join('')}</select>
+        </div>
+        <div class="f">
+          <label>세금계산서 발행일</label>
+          <select id="e_tax">
+            <option value="">선택 안 함</option>
+            ${['말일','월초','입금일'].map(v=>`<option value="${v}" ${f.taxDay===v?'selected':''}>${v==='말일'?'전월 말일 발행':v==='월초'?'당월 초 발행':'입금일 당일 발행'}</option>`).join('')}
+          </select>
+        </div>
+        <div class="f span2">
+          <label>거래 상태 <span class="hint">(중지 시 대시보드 집계·알림에서 제외)</span></label>
+          <div class="seg">
+            <button data-eactive="1" class="${f.active!==false?'on':''}">✅ 활성 (매월 자동 생성)</button>
+            <button data-eactive="0" class="${f.active===false?'on':''}">⏸ 중지</button>
+          </div>
+        </div>
+
+        <div class="f span2">
+          <label>알림 시점 <span class="hint">(복수 선택)</span></label>
+          <div class="checks">
+            ${LEADS.map(l=>`<div class="chk ${el.indexOf(l.v)>-1?'on':''}" data-elead="${l.v}">${el.indexOf(l.v)>-1?'☑':'☐'} 입금 ${l.t}</div>`).join('')}
+          </div>
+        </div>
+        <div class="f span2">
+          <label>알림 채널</label>
+          <div class="checks">
+            ${CHANS.map(c=>`<div class="chk ${ch.indexOf(c)>-1?'on':''}" data-echan="${c}">${ch.indexOf(c)>-1?'☑':'☐'} ${c}</div>`).join('')}
+          </div>
+        </div>
+        <div class="f span4">
+          <label>메모</label>
+          <input type="text" id="e_memo" value="${esc(f.memo||'')}" placeholder="예) 월초 계산서 발행 · 입금 지연 잦음 → D-3 사전 안내">
+        </div>
+      </div>
+      <div class="form-actions">
+        <div class="note">입금일·금액을 바꾸면 이번 달 예정 건과 알림에 즉시 반영됩니다. (이미 처리된 입금 이력은 유지)</div>
+        <button class="btn sm danger" data-del="${s.id}">🗑 삭제</button>
+        <button class="btn sm" data-ecancel="1">취소</button>
+        <button class="btn sm primary" data-esave="${s.id}">수정 저장</button>
+      </div>
+    </div></td></tr>`;
+}
+
+/* 인라인 수정 폼의 현재 입력값을 editForm 에 반영 */
+function syncEdit(){
+  if(!editForm) return;
+  const g = id => document.getElementById(id);
+  if(g('e_name')) editForm.name = g('e_name').value.trim();
+  if(g('e_day'))  editForm.dueDay = g('e_day').value === 'EOM' ? 'EOM' : Number(g('e_day').value);
+  if(g('e_amt'))  editForm.amount = parseMoney(g('e_amt').value);
+  if(g('e_owner'))editForm.owner = g('e_owner').value.trim();
+  if(g('e_method'))editForm.method = g('e_method').value;
+  if(g('e_tax'))  editForm.taxDay = g('e_tax').value;
+  if(g('e_memo')) editForm.memo = g('e_memo').value.trim();
+}
+function openEditor(id){
+  const s = DB.schedules.find(x=>x.id===id);
+  payEdit = id;
+  editForm = {...s, leads:(s.leads||[]).slice(), channels:(s.channels||[]).slice()};
+  view = 'pay'; renderAll();
+  const row = document.querySelector('.edit-row');
+  if(row && row.scrollIntoView) row.scrollIntoView({block:'center', behavior:'smooth'});
+}
+function closeEditor(){ payEdit = null; editForm = null; }
+
+/* =====================================================================
+   RENDER : 미팅 일정
+   ===================================================================== */
+function renderMeet(){
+  const e = meetEdit ? DB.meetings.find(m=>m.id===meetEdit) : null;
+  const t = today();
+  let list = DB.meetings.slice().sort((a,b)=>(b.date+(b.time||'')).localeCompare(a.date+(a.time||'')));
+  if(meetFilter.q){
+    const q = meetFilter.q.toLowerCase();
+    list = list.filter(m=>(m.company+' '+(m.agenda||'')+' '+(m.notes||'')+' '+[...(m.ours||[]),...(m.clients||[])].join(' ')).toLowerCase().includes(q));
+  }
+  if(meetFilter.scope==='upcoming') list = list.filter(m=>diffDays(new Date(m.date+'T00:00'),t)>=0).reverse();
+  if(meetFilter.scope==='past') list = list.filter(m=>diffDays(new Date(m.date+'T00:00'),t)<0);
+
+  const companies = DB.schedules.map(s=>s.name);
+
+  document.getElementById('view-meet').innerHTML = `
+  <div class="card">
+    <div class="card-head">
+      <h2>${e?'✏️ 미팅 수정':'➕ 미팅 일정 등록'}</h2>
+      <span class="sub">일시·참석자·회의록·액션 아이템을 함께 기록합니다. 미팅 전날 자동 알림이 발송됩니다.</span>
+    </div>
+    <div class="form-grid">
+      <div class="f">
+        <label>업체명 <span class="req">*</span></label>
+        <input type="text" id="m_company" list="coList" placeholder="업체 선택 또는 직접 입력" value="${esc(e?e.company:'')}">
+        <datalist id="coList">${companies.map(c=>`<option value="${esc(c)}">`).join('')}</datalist>
+      </div>
+      <div class="f">
+        <label>미팅 일자 <span class="req">*</span></label>
+        <input type="date" id="m_date" value="${esc(e?e.date:fmtISO(t))}">
+      </div>
+      <div class="f">
+        <label>시작 시간 <span class="req">*</span></label>
+        <input type="time" id="m_time" value="${esc(e?e.time:'14:00')}">
+      </div>
+      <div class="f">
+        <label>소요 시간</label>
+        <select id="m_dur">${['30분','1시간','1시간 30분','2시간','반나절'].map(v=>`<option ${e&&e.dur===v?'selected':''}>${v}</option>`).join('')}</select>
+      </div>
+
+      <div class="f">
+        <label>진행 방식</label>
+        <div class="seg" id="m_mode">
+          ${['대면','화상','전화'].map(v=>`<button data-mode="${v}" class="${(e?e.mode:form.mode||'대면')===v?'on':''}">${v}</button>`).join('')}
+        </div>
+      </div>
+      <div class="f span2">
+        <label>장소 / 접속 링크</label>
+        <input type="text" id="m_place" placeholder="예) 병원 원장실 / Google Meet 링크" value="${esc(e?e.place:'')}">
+      </div>
+      <div class="f">
+        <label>미팅 구분</label>
+        <select id="m_type">${['정기 보고','신규 제안','계약 협의','이슈 대응','기타'].map(v=>`<option ${e&&e.type===v?'selected':''}>${v}</option>`).join('')}</select>
+      </div>
+
+      <div class="f span2">
+        <label>참석자 – 우리 측 <span class="hint">(입력 후 Enter)</span></label>
+        <div class="chipbox" id="m_ours">
+          ${form.ours.map((n,i)=>`<span class="chip our"><b>${esc(n)}</b><button data-rm-our="${i}">×</button></span>`).join('')}
+          <input type="text" placeholder="예) 홍길동 팀장" data-chip="ours">
+        </div>
+      </div>
+      <div class="f span2">
+        <label>참석자 – 고객 측 <span class="hint">(입력 후 Enter)</span></label>
+        <div class="chipbox" id="m_clients">
+          ${form.clients.map((n,i)=>`<span class="chip cli"><b>${esc(n)}</b><button data-rm-cli="${i}">×</button></span>`).join('')}
+          <input type="text" placeholder="예) 이 원장" data-chip="clients">
+        </div>
+      </div>
+
+      <div class="f span2">
+        <label>안건 <span class="req">*</span></label>
+        <input type="text" id="m_agenda" placeholder="예) 9월 광고 예산 및 신규 상품 진행안 논의" value="${esc(e?e.agenda:'')}">
+      </div>
+      <div class="f span2">
+        <label>전날 알림</label>
+        <div class="row" style="gap:10px">
+          <div class="chk ${form.remind!==false?'on':''}" id="m_remind">${form.remind!==false?'☑':'☐'} 미팅 전날 알림 받기</div>
+          <select id="m_remind_at" style="width:auto">${['09:00','13:00','18:00','20:00'].map(v=>`<option ${((e&&e.remindAt)||form.remindAt||'18:00')===v?'selected':''}>${v}</option>`).join('')}</select>
+          <span class="hint">전날 지정 시각에 담당자에게 알림</span>
+        </div>
+      </div>
+
+      <div class="f span4">
+        <label>회의록 – 논의 내용</label>
+        <textarea id="m_notes" placeholder="· 논의 배경&#10;· 주요 논의 사항&#10;· 고객 요청/피드백">${esc(e?e.notes:'')}</textarea>
+      </div>
+      <div class="f span2">
+        <label>결정 사항</label>
+        <textarea id="m_decisions" placeholder="· 확정된 내용&#10;· 합의 금액/일정">${esc(e?e.decisions:'')}</textarea>
+      </div>
+      <div class="f span2">
+        <label>액션 아이템 <span class="hint">(할 일 · 담당 · 기한)</span></label>
+        <div id="m_items">
+          ${form.items.map((it,i)=>`
+          <div class="ai-row">
+            <input type="text" placeholder="예) 9월 광고안 초안 발송" value="${esc(it.task)}" data-it="task" data-i="${i}">
+            <input type="text" placeholder="담당자" value="${esc(it.owner)}" data-it="owner" data-i="${i}">
+            <input type="date" value="${esc(it.due)}" data-it="due" data-i="${i}">
+            <button class="x" data-rm-item="${i}">×</button>
+          </div>`).join('')}
+        </div>
+        <button class="btn sm" id="m_add_item" style="align-self:flex-start">+ 액션 아이템 추가</button>
+      </div>
+    </div>
+    <div class="form-actions">
+      <div class="note">* 표시는 필수 입력 항목입니다. 회의록은 등록 후에도 수정할 수 있습니다.</div>
+      ${e?'<button class="btn" id="m_cancel">취소</button>':''}
+      <button class="btn primary" id="m_submit">${e?'수정 저장':'미팅 등록'}</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <h2>미팅 목록</h2>
+      <span class="sub">총 ${DB.meetings.length}건</span>
+      <div class="right">
+        <div class="searchbox"><input type="text" id="mt_q" placeholder="업체·안건·참석자 검색" value="${esc(meetFilter.q)}"></div>
+        <div class="seg" id="mt_scope" style="width:230px">
+          ${[['upcoming','예정'],['past','지난'],['all','전체']].map(([v,t2])=>`<button data-scope="${v}" class="${meetFilter.scope===v?'on':''}">${t2}</button>`).join('')}
+        </div>
+      </div>
+    </div>
+    ${list.length ? list.map(m=>meetingCard(m,t)).join('')
+      : '<div class="empty"><b>표시할 미팅이 없습니다</b>위 폼에서 미팅 일정을 등록해 주세요.</div>'}
+  </div>`;
+}
+
+function meetingCard(m, t){
+  const d = new Date(m.date+'T00:00'), dd = diffDays(d, t);
+  const att = [...(m.ours||[]).map(n=>`<span class="chip our"><b>${esc(n)}</b></span>`),
+               ...(m.clients||[]).map(n=>`<span class="chip cli"><b>${esc(n)}</b></span>`)].join(' ');
+  const badge = dd < 0 ? '<span class="badge b-mute">종료</span>'
+    : dd === 0 ? '<span class="badge b-soon">오늘</span>'
+    : dd === 1 ? '<span class="badge b-soon">내일</span>'
+    : '<span class="badge b-pp">D-'+dd+'</span>';
+  const items = (m.items||[]).filter(i=>i.task);
+  const doneN = items.filter(i=>i.done).length;
+  return `<div class="mtg" data-mtg="${m.id}">
+    <div class="mtg-head" data-toggle="${m.id}">
+      <div class="mtg-date">
+        <div class="m">${d.getMonth()+1}월</div>
+        <div class="d">${d.getDate()}</div>
+        <div class="w">${WEEK[d.getDay()]}요일</div>
+      </div>
+      <div class="mtg-main">
+        <div class="mtg-title">${esc(m.company)} ${badge}
+          <span class="badge b-mute">${esc(m.type||'기타')}</span>
+          ${m.remind!==false && dd>=1 ? '<span class="badge b-wait">🔔 전날 '+esc(m.remindAt||'18:00')+' 알림</span>':''}
+        </div>
+        <div class="mtg-meta">
+          <span>🕐 ${esc(m.time||'')} · ${esc(m.dur||'1시간')}</span>
+          <span>📍 ${esc(m.mode||'')}${m.place?' · '+esc(m.place):''}</span>
+          <span>👥 ${(m.ours||[]).length + (m.clients||[]).length}명</span>
+          ${items.length?`<span>✅ 액션 ${doneN}/${items.length}</span>`:''}
+        </div>
+        <div class="mtg-meta" style="color:var(--text2)">📌 ${esc(m.agenda||'안건 미기재')}</div>
+      </div>
+      <div style="color:var(--muted);font-size:12px">▾</div>
+    </div>
+    <div class="mtg-body">
+      <div class="rec"><h5>참석자</h5><div class="row">${att||'<span class="hint">기록 없음</span>'}</div></div>
+      <div class="rec"><h5>회의록 – 논의 내용</h5><div class="txt">${esc(m.notes)||'<span style="color:var(--muted)">작성된 회의록이 없습니다.</span>'}</div></div>
+      ${m.decisions?`<div class="rec"><h5>결정 사항</h5><div class="txt">${esc(m.decisions)}</div></div>`:''}
+      ${items.length?`<div class="rec"><h5>액션 아이템</h5><ul class="ai-list">
+        ${items.map((it,i)=>`<li class="${it.done?'done':''}">
+          <input type="checkbox" class="cbx" ${it.done?'checked':''} data-item-done="${m.id}" data-idx="${i}">
+          <span class="task">${esc(it.task)}</span>
+          <span class="owner">${esc(it.owner||'담당 미지정')}${it.due?' · ~'+esc(it.due):''}</span>
+        </li>`).join('')}
+      </ul></div>`:''}
+      <div class="row" style="margin-top:16px">
+        <button class="btn sm" data-mt-edit="${m.id}">✏️ 수정</button>
+        <button class="btn sm" data-mt-copy="${m.id}">📋 회의록 복사</button>
+        <button class="btn sm danger" data-mt-del="${m.id}" style="margin-left:auto">🗑 삭제</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* =====================================================================
+   모달 : 캘린더 항목 상세보기 / 수정
+   ===================================================================== */
+function openModal(kind, key){
+  const wasEditing = !!payEdit;
+  closeEditor();                                   // 목록 인라인 편집과 동시 사용 방지
+  modal = {kind, id:key, date:key, edit:false};
+  mForm = null;
+  if(wasEditing) renderPay();
+  renderModal();
+}
+function closeModal(){ modal = null; mForm = null; renderModal(); }
+
+function renderModal(){
+  const root = document.getElementById('modalRoot');
+  if(!modal){ root.classList.remove('open'); root.innerHTML = ''; return; }
+  let html = '';
+  if(modal.kind === 'pay')  html = modalPay();
+  if(modal.kind === 'meet') html = modalMeet();
+  if(modal.kind === 'day')  html = modalDay();
+  if(!html){ modal = null; root.classList.remove('open'); root.innerHTML=''; return; }
+  root.innerHTML = html; root.classList.add('open');
+}
+
+/* ---------- 입금 항목 ---------- */
+function modalPay(){
+  const s = DB.schedules.find(x=>x.id===modal.id);
+  if(!s) return '';
+  const due = dueDateOf(s, cursor), st = statusOf(s, cursor), meta = STATUS_META[st];
+  const rec = DB.payments[payKey(s, cursor)];
+  const head = `<div class="modal-head">
+      <span class="badge ${meta.cls}">${meta.txt}</span>
+      <div class="ttl">${esc(s.name)}</div>
+      <button class="x" data-mclose="1">✕</button>
+    </div>`;
+
+  if(!modal.edit){
+    return `<div class="modal">${head}
+      <div class="modal-body">
+        <dl class="dl">
+          <dt>매월 입금일</dt><dd><b>${dueLabel(s)}</b></dd>
+          <dt>${cursor.getMonth()+1}월 예정일</dt><dd>${fmtDate(due)} · <b style="color:${st==='late'?'var(--danger)':'var(--accent)'}">${st==='paid'?'입금완료':ddayText(due)}</b></dd>
+          <dt>입금 요청 금액</dt><dd><b class="num" style="font-size:15px">${won(s.amount)}원</b> <span style="color:var(--muted)">(${manwon(s.amount)}원)</span></dd>
+          <dt>담당자</dt><dd>${esc(s.owner||'—')}</dd>
+          <dt>결제 수단</dt><dd>${esc(s.method||'—')}</dd>
+          <dt>세금계산서</dt><dd>${s.taxDay ? esc(s.taxDay)+' 발행' : '—'}</dd>
+          <dt>알림 설정</dt><dd>${(s.leads||[]).map(l=>l===0?'당일':'D-'+l).join(', ')||'—'} · ${(s.channels||[]).join('/')||'채널 미설정'}</dd>
+          <dt>거래 상태</dt><dd>${s.active!==false?'✅ 활성 (매월 자동 생성)':'⏸ 중지'}</dd>
+          <dt>입금 처리</dt><dd>${rec ? '✅ '+esc(rec.paidAt)+' 처리 · '+won(rec.amount)+'원' : '미처리'}</dd>
+          <dt>메모</dt><dd>${esc(s.memo||'—')}</dd>
+        </dl>
+      </div>
+      <div class="modal-foot">
+        <div class="note">${cursor.getFullYear()}년 ${cursor.getMonth()+1}월 기준</div>
+        ${st==='paid' ? '<button class="btn sm" data-unpay="'+s.id+'">입금 취소</button>'
+                      : '<button class="btn sm ok" data-pay="'+s.id+'">입금 확인</button>'}
+        <button class="btn sm danger" data-mdel="pay|${s.id}">삭제</button>
+        <button class="btn sm primary" data-medit="1">✏️ 수정</button>
+      </div></div>`;
+  }
+
+  const f = mForm, el = f.leads||[], ch = f.channels||[];
+  const LEADS = [{v:7,t:'7일 전'},{v:3,t:'3일 전'},{v:1,t:'1일 전'},{v:0,t:'당일'}];
+  const CHANS = ['사내알림','이메일','카카오톡','SMS'];
+  return `<div class="modal">${head}
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="f"><label>업체명 <span class="req">*</span></label><input type="text" id="x_name" value="${esc(f.name)}"></div>
+        <div class="f"><label>매월 입금일 <span class="req">*</span></label>
+          <select id="x_day">
+            ${Array.from({length:31},(_,i)=>i+1).map(d=>`<option value="${d}" ${String(f.dueDay)===String(d)?'selected':''}>매월 ${d}일</option>`).join('')}
+            <option value="EOM" ${f.dueDay==='EOM'?'selected':''}>매월 말일</option>
+          </select></div>
+        <div class="f"><label>입금 요청 금액 <span class="req">*</span></label>
+          <div class="money-in"><input type="text" id="x_amt" class="money" value="${won(f.amount)}"><span>원</span></div></div>
+        <div class="f"><label>담당자</label><input type="text" id="x_owner" value="${esc(f.owner||'')}"></div>
+        <div class="f"><label>결제 수단</label>
+          <select id="x_method">${['계좌이체','자동이체','카드결제','현금','기타'].map(v=>`<option ${f.method===v?'selected':''}>${v}</option>`).join('')}</select></div>
+        <div class="f"><label>세금계산서 발행일</label>
+          <select id="x_tax"><option value="">선택 안 함</option>
+            ${['말일','월초','입금일'].map(v=>`<option value="${v}" ${f.taxDay===v?'selected':''}>${v==='말일'?'전월 말일 발행':v==='월초'?'당월 초 발행':'입금일 당일 발행'}</option>`).join('')}
+          </select></div>
+        <div class="f span2"><label>거래 상태</label>
+          <div class="seg">
+            <button data-xactive="1" class="${f.active!==false?'on':''}">✅ 활성</button>
+            <button data-xactive="0" class="${f.active===false?'on':''}">⏸ 중지</button>
+          </div></div>
+        <div class="f span2"><label>알림 시점</label>
+          <div class="checks">${LEADS.map(l=>`<div class="chk ${el.indexOf(l.v)>-1?'on':''}" data-xlead="${l.v}">${el.indexOf(l.v)>-1?'☑':'☐'} 입금 ${l.t}</div>`).join('')}</div></div>
+        <div class="f span2"><label>알림 채널</label>
+          <div class="checks">${CHANS.map(c=>`<div class="chk ${ch.indexOf(c)>-1?'on':''}" data-xchan="${c}">${ch.indexOf(c)>-1?'☑':'☐'} ${c}</div>`).join('')}</div></div>
+        <div class="f span2"><label>메모</label><input type="text" id="x_memo" value="${esc(f.memo||'')}"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <div class="note">저장 시 캘린더·대시보드·알림에 즉시 반영됩니다.</div>
+      <button class="btn sm" data-mcancel="1">취소</button>
+      <button class="btn sm primary" data-msave="pay">수정 저장</button>
+    </div></div>`;
+}
+
+/* ---------- 미팅 항목 ---------- */
+function modalMeet(){
+  const m = DB.meetings.find(x=>x.id===modal.id);
+  if(!m) return '';
+  const d = new Date(m.date+'T00:00'), dd = diffDays(d, today());
+  const head = `<div class="modal-head">
+      <span class="badge ${dd<0?'b-mute':dd<=1?'b-soon':'b-pp'}">${dd<0?'종료':dd===0?'오늘':dd===1?'내일':'D-'+dd}</span>
+      <div class="ttl">${esc(m.company)} 미팅</div>
+      <button class="x" data-mclose="1">✕</button>
+    </div>`;
+  const items = (m.items||[]).filter(i=>i.task);
+
+  if(!modal.edit){
+    return `<div class="modal">${head}
+      <div class="modal-body">
+        <dl class="dl">
+          <dt>일시</dt><dd><b>${esc(m.date)} (${WEEK[d.getDay()]}) ${esc(m.time||'')}</b> · ${esc(m.dur||'')}</dd>
+          <dt>진행 방식</dt><dd>${esc(m.mode||'—')}${m.place?' · '+esc(m.place):''}</dd>
+          <dt>미팅 구분</dt><dd>${esc(m.type||'—')}</dd>
+          <dt>안건</dt><dd>${esc(m.agenda||'—')}</dd>
+          <dt>참석자</dt><dd>${
+            [...(m.ours||[]).map(n=>`<span class="chip our"><b>${esc(n)}</b></span>`),
+             ...(m.clients||[]).map(n=>`<span class="chip cli"><b>${esc(n)}</b></span>`)].join(' ') || '—'}</dd>
+          <dt>전날 알림</dt><dd>${m.remind!==false ? '🔔 전날 '+esc(m.remindAt||'18:00')+' 발송' : '사용 안 함'}</dd>
+        </dl>
+        <div class="rec"><h5>회의록 – 논의 내용</h5><div class="txt">${esc(m.notes)||'작성된 회의록이 없습니다.'}</div></div>
+        ${m.decisions?`<div class="rec"><h5>결정 사항</h5><div class="txt">${esc(m.decisions)}</div></div>`:''}
+        ${items.length?`<div class="rec"><h5>액션 아이템 (${items.filter(i=>i.done).length}/${items.length})</h5><ul class="ai-list">
+          ${items.map((it,i)=>`<li class="${it.done?'done':''}">
+            <input type="checkbox" class="cbx" ${it.done?'checked':''} data-item-done="${m.id}" data-idx="${i}">
+            <span class="task">${esc(it.task)}</span>
+            <span class="owner">${esc(it.owner||'담당 미지정')}${it.due?' · ~'+esc(it.due):''}</span></li>`).join('')}
+        </ul></div>`:''}
+      </div>
+      <div class="modal-foot">
+        <div class="note">액션 아이템은 체크만으로 바로 저장됩니다.</div>
+        <button class="btn sm" data-mtcopy2="${m.id}">📋 회의록 복사</button>
+        <button class="btn sm danger" data-mdel="meet|${m.id}">삭제</button>
+        <button class="btn sm primary" data-medit="1">✏️ 수정</button>
+      </div></div>`;
+  }
+
+  const f = mForm;
+  return `<div class="modal">${head}
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="f"><label>업체명 <span class="req">*</span></label><input type="text" id="x_company" value="${esc(f.company)}"></div>
+        <div class="f"><label>미팅 구분</label>
+          <select id="x_type">${['정기 보고','신규 제안','계약 협의','이슈 대응','기타'].map(v=>`<option ${f.type===v?'selected':''}>${v}</option>`).join('')}</select></div>
+        <div class="f"><label>미팅 일자 <span class="req">*</span></label><input type="date" id="x_date" value="${esc(f.date)}"></div>
+        <div class="f"><label>시작 시간 <span class="req">*</span></label><input type="time" id="x_time" value="${esc(f.time||'')}"></div>
+        <div class="f"><label>소요 시간</label>
+          <select id="x_dur">${['30분','1시간','1시간 30분','2시간','반나절'].map(v=>`<option ${f.dur===v?'selected':''}>${v}</option>`).join('')}</select></div>
+        <div class="f"><label>진행 방식</label>
+          <select id="x_mode">${['대면','화상','전화'].map(v=>`<option ${f.mode===v?'selected':''}>${v}</option>`).join('')}</select></div>
+        <div class="f span2"><label>장소 / 접속 링크</label><input type="text" id="x_place" value="${esc(f.place||'')}"></div>
+        <div class="f span2"><label>안건 <span class="req">*</span></label><input type="text" id="x_agenda" value="${esc(f.agenda||'')}"></div>
+        <div class="f"><label>참석자 – 우리 측 <span class="hint">(쉼표로 구분)</span></label>
+          <input type="text" id="x_ours" value="${esc((f.ours||[]).join(', '))}" placeholder="홍길동 팀장, 김민수 AE"></div>
+        <div class="f"><label>참석자 – 고객 측 <span class="hint">(쉼표로 구분)</span></label>
+          <input type="text" id="x_clients" value="${esc((f.clients||[]).join(', '))}" placeholder="이 원장, 최 실장"></div>
+        <div class="f span2"><label>회의록 – 논의 내용</label><textarea id="x_notes">${esc(f.notes||'')}</textarea></div>
+        <div class="f span2"><label>결정 사항</label><textarea id="x_decisions">${esc(f.decisions||'')}</textarea></div>
+        <div class="f span2"><label>액션 아이템 <span class="hint">(한 줄에 하나 · 할일 | 담당자 | 기한(YYYY-MM-DD))</span></label>
+          <textarea id="x_items" placeholder="9월 광고안 초안 발송 | 김민수 | 2026-09-05">${esc((f.items||[]).filter(i=>i.task).map(i=>[i.task,i.owner||'',i.due||''].join(' | ')).join('\n'))}</textarea></div>
+        <div class="f span2"><label>전날 알림</label>
+          <div class="row" style="gap:10px">
+            <div class="chk ${f.remind!==false?'on':''}" data-xremind="1">${f.remind!==false?'☑':'☐'} 미팅 전날 알림 받기</div>
+            <select id="x_remind_at" style="width:auto">${['09:00','13:00','18:00','20:00'].map(v=>`<option ${(f.remindAt||'18:00')===v?'selected':''}>${v}</option>`).join('')}</select>
+          </div></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <div class="note">완료 체크된 액션 아이템은 저장 후에도 유지됩니다.</div>
+      <button class="btn sm" data-mcancel="1">취소</button>
+      <button class="btn sm primary" data-msave="meet">수정 저장</button>
+    </div></div>`;
+}
+
+/* ---------- 날짜별 전체 목록 ---------- */
+function modalDay(){
+  const iso = modal.date, d = new Date(iso+'T00:00');
+  const base = new Date(d.getFullYear(), d.getMonth(), 1);
+  const pays = DB.schedules.filter(s=>s.active && fmtISO(dueDateOf(s, base))===iso);
+  const mts = DB.meetings.filter(m=>m.date===iso);
+  return `<div class="modal">
+    <div class="modal-head">
+      <div class="ttl">${d.getFullYear()}. ${d.getMonth()+1}. ${d.getDate()} (${WEEK[d.getDay()]})</div>
+      <span class="badge b-mute">일정 ${pays.length + mts.length}건</span>
+      <button class="x" data-mclose="1">✕</button>
+    </div>
+    <div class="modal-body">
+      ${pays.length||mts.length ? '' : '<div class="empty"><b>등록된 일정이 없습니다</b>이 날짜에는 입금 예정이나 미팅이 없습니다.</div>'}
+      ${pays.map(s=>{
+        const st = statusOf(s, base), meta = STATUS_META[st];
+        return `<div class="day-item" data-ev="pay|${s.id}">
+          <span class="badge b-wait">💰 입금</span>
+          <div class="n">${esc(s.name)}<small>${esc(s.owner||'담당 미지정')} · ${esc(s.method||'')}</small></div>
+          <div class="num" style="font-weight:700">${won(s.amount)}원</div>
+          <span class="badge ${meta.cls}">${meta.txt}</span>
+        </div>`;
+      }).join('')}
+      ${mts.map(m=>`<div class="day-item" data-ev="meet|${m.id}">
+          <span class="badge b-pp">🗓 미팅</span>
+          <div class="n">${esc(m.company)}<small>${esc(m.time||'')} · ${esc(m.mode||'')} · ${esc(m.agenda||'')}</small></div>
+          <span class="badge b-mute">${esc(m.type||'')}</span>
+        </div>`).join('')}
+    </div>
+    <div class="modal-foot"><div class="note">항목을 클릭하면 상세보기 / 수정할 수 있습니다.</div>
+      <button class="btn sm" data-mclose="1">닫기</button></div></div>`;
+}
+
+/* ---------- 모달 저장 ---------- */
+function syncModal(){
+  if(!mForm) return;
+  const g = id => document.getElementById(id);
+  if(modal.kind === 'pay'){
+    if(g('x_name'))  mForm.name = g('x_name').value.trim();
+    if(g('x_day'))   mForm.dueDay = g('x_day').value === 'EOM' ? 'EOM' : Number(g('x_day').value);
+    if(g('x_amt'))   mForm.amount = parseMoney(g('x_amt').value);
+    if(g('x_owner')) mForm.owner = g('x_owner').value.trim();
+    if(g('x_method'))mForm.method = g('x_method').value;
+    if(g('x_tax'))   mForm.taxDay = g('x_tax').value;
+    if(g('x_memo'))  mForm.memo = g('x_memo').value.trim();
+  } else if(modal.kind === 'meet'){
+    if(g('x_company'))  mForm.company = g('x_company').value.trim();
+    if(g('x_type'))     mForm.type = g('x_type').value;
+    if(g('x_date'))     mForm.date = g('x_date').value;
+    if(g('x_time'))     mForm.time = g('x_time').value;
+    if(g('x_dur'))      mForm.dur = g('x_dur').value;
+    if(g('x_mode'))     mForm.mode = g('x_mode').value;
+    if(g('x_place'))    mForm.place = g('x_place').value.trim();
+    if(g('x_agenda'))   mForm.agenda = g('x_agenda').value.trim();
+    if(g('x_ours'))     mForm.ours = splitNames(g('x_ours').value);
+    if(g('x_clients'))  mForm.clients = splitNames(g('x_clients').value);
+    if(g('x_notes'))    mForm.notes = g('x_notes').value;
+    if(g('x_decisions'))mForm.decisions = g('x_decisions').value;
+    if(g('x_items'))    mForm.items = parseItems(g('x_items').value, mForm.items||[]);
+    if(g('x_remind_at'))mForm.remindAt = g('x_remind_at').value;
+  }
+}
+function splitNames(v){ return v.split(',').map(x=>x.trim()).filter(Boolean); }
+function parseItems(text, prev){
+  return text.split('\n').map(line=>line.trim()).filter(Boolean).map(line=>{
+    const p = line.split('|').map(x=>x.trim());
+    const old = prev.find(o=>o.task === p[0]);      // 완료 체크 상태 유지
+    return {task:p[0], owner:p[1]||'', due:p[2]||'', done: old ? !!old.done : false};
+  });
+}
+function saveModal(kind){
+  syncModal();
+  if(kind === 'pay'){
+    if(!mForm.name) return toast('업체명을 입력해 주세요.');
+    if(!mForm.amount) return toast('입금 요청 금액을 입력해 주세요.');
+    const s = DB.schedules.find(x=>x.id===modal.id);
+    mForm.leads = (mForm.leads||[]).slice().sort((a,b)=>b-a);
+    Object.assign(s, mForm);
+    modal.edit = false; mForm = null; save(); renderAll(); toast(s.name + ' 정보가 수정되었습니다.');
+  } else {
+    if(!mForm.company) return toast('업체명을 입력해 주세요.');
+    if(!mForm.date || !mForm.time) return toast('미팅 일시를 입력해 주세요.');
+    if(!mForm.agenda) return toast('안건을 입력해 주세요.');
+    const m = DB.meetings.find(x=>x.id===modal.id);
+    Object.assign(m, mForm);
+    modal.edit = false; mForm = null; save(); renderAll(); toast(m.company + ' 미팅 정보가 수정되었습니다.');
+  }
+}
+
+/* =====================================================================
+   알림 패널
+   ===================================================================== */
+function renderAlerts(){
+  const a = buildAlerts();
+  document.getElementById('bellCnt').textContent = a.length;
+  document.getElementById('bellCnt').style.display = a.length ? 'grid' : 'none';
+  document.getElementById('alertPanel').innerHTML =
+    '<h4>🔔 알림<span>' + fmtDate(today()) + ' 기준</span></h4>' +
+    (a.length ? a.map(x=>`
+      <div class="al">
+        <div class="ic ${x.cls}">${x.icon}</div>
+        <div style="min-width:0">
+          <div class="t">${esc(x.title)}</div>
+          <div class="d">${esc(x.desc)}</div>
+        </div>
+        <div class="when">${x.when}</div>
+      </div>`).join('')
+     : '<div class="empty">새로운 알림이 없습니다.</div>');
+}
+
+/* =====================================================================
+   렌더 총괄 / 이벤트
+   ===================================================================== */
+function renderAll(){
+  document.getElementById('mLabel').textContent = cursor.getFullYear()+'년 '+(cursor.getMonth()+1)+'월';
+  document.getElementById('tabPayCnt').textContent = DB.schedules.filter(s=>s.active).length;
+  document.getElementById('tabMeetCnt').textContent = DB.meetings.filter(m=>diffDays(new Date(m.date+'T00:00'),today())>=0).length;
+  renderDash(); renderPay(); renderMeet(); renderAlerts(); renderModal();
+  ['dash','pay','meet'].forEach(v=>document.getElementById('view-'+v).style.display = (v===view?'':'none'));
+  document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active', b.dataset.view===view));
+}
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._h); t._h = setTimeout(()=>t.classList.remove('show'), 2200);
+}
+function parseMoney(v){ return Number(String(v).replace(/[^0-9]/g,'')) || 0; }
+
+/* 상단 컨트롤 */
+document.getElementById('mPrev').onclick = ()=>{ cursor = new Date(cursor.getFullYear(), cursor.getMonth()-1, 1); renderAll(); };
+document.getElementById('mNext').onclick = ()=>{ cursor = new Date(cursor.getFullYear(), cursor.getMonth()+1, 1); renderAll(); };
+document.getElementById('mToday').onclick = ()=>{ cursor = startOfMonth(new Date()); renderAll(); };
+document.querySelectorAll('.tab').forEach(b=> b.onclick = ()=>{ view = b.dataset.view; renderAll(); });
+/* 테마: 지정값이 없으면 보는 사람의 시스템 설정을 따른다 */
+function effectiveTheme(){
+  const t = document.documentElement.dataset.theme;
+  if(t === 'light' || t === 'dark') return t;
+  return (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) ? 'light' : 'dark';
+}
+function applyThemeLabel(){
+  const b = document.getElementById('themeBtn');
+  if(b) b.textContent = effectiveTheme() === 'dark' ? '🌙 Dark' : '☀ Light';
+}
+document.getElementById('themeBtn').onclick = function(){
+  document.documentElement.dataset.theme = effectiveTheme() === 'dark' ? 'light' : 'dark';
+  applyThemeLabel();
+};
+document.getElementById('bellBtn').onclick = e=>{ e.stopPropagation(); document.getElementById('alertPanel').classList.toggle('open'); };
+document.addEventListener('click', e=>{
+  const p = document.getElementById('alertPanel');
+  if(p.classList.contains('open') && !p.contains(e.target)) p.classList.remove('open');
+});
+/* 모달: 바깥 클릭 / ESC 로 닫기 */
+document.getElementById('modalRoot').addEventListener('click', e=>{
+  if(e.target.id === 'modalRoot') closeModal();
+});
+document.addEventListener('keydown', e=>{
+  if(e.key === 'Escape'){
+    if(modal){ closeModal(); return; }
+    if(payEdit){ closeEditor(); renderPay(); }
+  }
+});
+document.getElementById('exportBtn').onclick = ()=>{
+  const blob = new Blob([JSON.stringify(DB,null,2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'ekd-erp-입금미팅-' + fmtISO(new Date()) + '.json';
+  a.click(); toast('백업 파일을 내려받았습니다.');
+};
+
+/* 전역 클릭 위임 */
+document.addEventListener('click', e=>{
+  const el = e.target.closest('[data-goto],[data-pay],[data-unpay],[data-edit],[data-del],[data-lead],[data-chan],[data-esave],[data-ecancel],[data-elead],[data-echan],[data-eactive],[data-ev],[data-day],[data-mclose],[data-medit],[data-mcancel],[data-msave],[data-mdel],[data-mtcopy2],[data-xlead],[data-xchan],[data-xactive],[data-xremind],[data-toggle],[data-mt-edit],[data-mt-del],[data-mt-copy],[data-rm-our],[data-rm-cli],[data-rm-item],[data-mode],[data-scope],#openBell2,#p_submit,#p_cancel,#m_submit,#m_cancel,#m_add_item,#m_remind');
+  if(!el) return;
+
+  // 캘린더/요약 항목 클릭 → 상세 모달
+  if(el.dataset.ev){
+    const [kind, id] = el.dataset.ev.split('|');
+    openModal(kind, id); return;
+  }
+  if(el.dataset.day){ openModal('day', el.dataset.day); return; }
+  if(el.dataset.mclose){ closeModal(); return; }
+  if(el.dataset.medit){
+    const src = modal.kind==='pay' ? DB.schedules.find(x=>x.id===modal.id) : DB.meetings.find(x=>x.id===modal.id);
+    mForm = JSON.parse(JSON.stringify(src));
+    modal.edit = true; renderModal(); return;
+  }
+  if(el.dataset.mcancel){ modal.edit = false; mForm = null; renderModal(); return; }
+  if(el.dataset.msave){ saveModal(el.dataset.msave); return; }
+  if(el.dataset.mdel){
+    const [kind, id] = el.dataset.mdel.split('|');
+    if(kind === 'pay'){
+      const s = DB.schedules.find(x=>x.id===id);
+      if(!confirm(s.name + ' 입금 일정을 삭제할까요?\n(해당 업체의 입금 처리 이력도 함께 삭제됩니다)')) return;
+      DB.schedules = DB.schedules.filter(x=>x.id!==id);
+      Object.keys(DB.payments).forEach(k=>{ if(k.indexOf(id+'|')===0) delete DB.payments[k]; });
+    } else {
+      if(!confirm('이 미팅 기록을 삭제할까요?')) return;
+      DB.meetings = DB.meetings.filter(x=>x.id!==id);
+    }
+    modal = null; mForm = null; save(); renderAll(); toast('삭제되었습니다.'); return;
+  }
+  if(el.dataset.mtcopy2){ copyMinutes(el.dataset.mtcopy2); return; }
+  if(el.dataset.xlead !== undefined){
+    syncModal(); const v = Number(el.dataset.xlead), i = (mForm.leads=mForm.leads||[]).indexOf(v);
+    i>-1 ? mForm.leads.splice(i,1) : mForm.leads.push(v); renderModal(); return;
+  }
+  if(el.dataset.xchan){
+    syncModal(); const v = el.dataset.xchan, i = (mForm.channels=mForm.channels||[]).indexOf(v);
+    i>-1 ? mForm.channels.splice(i,1) : mForm.channels.push(v); renderModal(); return;
+  }
+  if(el.dataset.xactive){ syncModal(); mForm.active = el.dataset.xactive === '1'; renderModal(); return; }
+  if(el.dataset.xremind){ syncModal(); mForm.remind = !(mForm.remind !== false); renderModal(); return; }
+
+  // 탭 이동
+  if(el.dataset.goto){ view = el.dataset.goto; if(el.dataset.status) payFilter.status = el.dataset.status; renderAll(); return; }
+  if(el.id === 'openBell2'){ document.getElementById('alertPanel').classList.add('open'); return; }
+
+  // 입금 확인 / 취소
+  if(el.dataset.pay){
+    const sc = DB.schedules.find(s=>s.id===el.dataset.pay);
+    DB.payments[payKey(sc,cursor)] = {paidAt: fmtISO(new Date()), amount: sc.amount};
+    save(); renderAll(); toast(sc.name + ' 입금 완료 처리되었습니다.'); return;
+  }
+  if(el.dataset.unpay){
+    const sc = DB.schedules.find(s=>s.id===el.dataset.unpay);
+    delete DB.payments[payKey(sc,cursor)]; save(); renderAll(); toast('입금 처리를 취소했습니다.'); return;
+  }
+
+  // 입금 일정 인라인 수정 / 삭제
+  if(el.dataset.edit){ openEditor(el.dataset.edit); return; }
+  if(el.dataset.del){
+    const s = DB.schedules.find(x=>x.id===el.dataset.del);
+    if(confirm(s.name + ' 입금 일정을 삭제할까요?\n(해당 업체의 입금 처리 이력도 함께 삭제됩니다)')){
+      DB.schedules = DB.schedules.filter(x=>x.id!==s.id);
+      Object.keys(DB.payments).forEach(k=>{ if(k.indexOf(s.id+'|')===0) delete DB.payments[k]; });
+      closeEditor(); save(); renderAll(); toast('삭제되었습니다.');
+    } return;
+  }
+  if(el.dataset.ecancel){ closeEditor(); renderPay(); return; }
+  if(el.dataset.elead !== undefined){
+    syncEdit(); const v = Number(el.dataset.elead), i = editForm.leads.indexOf(v);
+    i>-1 ? editForm.leads.splice(i,1) : editForm.leads.push(v);
+    renderPay(); return;
+  }
+  if(el.dataset.echan){
+    syncEdit(); const v = el.dataset.echan, i = editForm.channels.indexOf(v);
+    i>-1 ? editForm.channels.splice(i,1) : editForm.channels.push(v);
+    renderPay(); return;
+  }
+  if(el.dataset.eactive){ syncEdit(); editForm.active = el.dataset.eactive === '1'; renderPay(); return; }
+  if(el.dataset.esave){
+    syncEdit();
+    if(!editForm.name) return toast('업체명을 입력해 주세요.');
+    if(!editForm.amount) return toast('입금 요청 금액을 입력해 주세요.');
+    const s = DB.schedules.find(x=>x.id===el.dataset.esave);
+    editForm.leads = editForm.leads.slice().sort((a,b)=>b-a);
+    Object.assign(s, editForm);
+    closeEditor(); save(); renderAll(); toast(s.name + ' 정보가 수정되었습니다.');
+    return;
+  }
+
+  // 알림 시점 / 채널 체크
+  if(el.dataset.lead !== undefined && el.dataset.lead !== ''){
+    const v = Number(el.dataset.lead), i = form.leads.indexOf(v);
+    i>-1 ? form.leads.splice(i,1) : form.leads.push(v);
+    renderPay(); return;
+  }
+  if(el.dataset.chan){
+    const v = el.dataset.chan, i = form.channels.indexOf(v);
+    i>-1 ? form.channels.splice(i,1) : form.channels.push(v);
+    renderPay(); return;
+  }
+
+  // 입금 폼 제출/취소
+  if(el.id === 'p_submit'){ submitPay(); return; }
+  if(el.id === 'p_cancel'){ payEdit=null; form.leads=[3,1,0]; form.channels=['사내알림']; renderPay(); return; }
+
+  // 미팅 카드 토글
+  if(el.dataset.toggle){ el.closest('.mtg').classList.toggle('open'); return; }
+  if(el.dataset.mtEdit){
+    const m = DB.meetings.find(x=>x.id===el.dataset.mtEdit);
+    meetEdit = m.id;
+    form.ours = (m.ours||[]).slice(); form.clients = (m.clients||[]).slice();
+    form.items = (m.items||[]).map(i=>({...i})); form.mode = m.mode; form.remind = m.remind!==false; form.remindAt = m.remindAt;
+    view='meet'; renderAll(); window.scrollTo({top:0, behavior:'smooth'}); return;
+  }
+  if(el.dataset.mtDel){
+    if(confirm('이 미팅 기록을 삭제할까요?')){
+      DB.meetings = DB.meetings.filter(x=>x.id!==el.dataset.mtDel);
+      save(); renderAll(); toast('삭제되었습니다.');
+    } return;
+  }
+  if(el.dataset.mtCopy){ copyMinutes(el.dataset.mtCopy); return; }
+
+  // 참석자 chip 삭제
+  if(el.dataset.rmOur !== undefined){ form.ours.splice(Number(el.dataset.rmOur),1); renderMeet(); return; }
+  if(el.dataset.rmCli !== undefined){ form.clients.splice(Number(el.dataset.rmCli),1); renderMeet(); return; }
+  if(el.dataset.rmItem !== undefined){ syncItemInputs(); form.items.splice(Number(el.dataset.rmItem),1); renderMeet(); return; }
+  if(el.id === 'm_add_item'){ syncItemInputs(); form.items.push({task:'',owner:'',due:'',done:false}); renderMeet(); return; }
+  if(el.dataset.mode){ form.mode = el.dataset.mode; renderMeet(); return; }
+  if(el.id === 'm_remind'){ form.remind = !(form.remind!==false); renderMeet(); return; }
+  if(el.dataset.scope){ meetFilter.scope = el.dataset.scope; renderMeet(); return; }
+  if(el.id === 'm_submit'){ submitMeet(); return; }
+  if(el.id === 'm_cancel'){ meetEdit=null; resetMeetForm(); renderMeet(); return; }
+});
+
+/* 입력 이벤트 */
+document.addEventListener('input', e=>{
+  const t = e.target;
+  if(t.classList.contains('money')){
+    const n = parseMoney(t.value);
+    t.value = n ? won(n) : '';
+    const h = document.getElementById('p_amt_hint');
+    if(h) h.textContent = n ? manwon(n)+'원' : '부가세 포함 금액 기준';
+  }
+  if(t.id === 'p_q'){ payFilter.q = t.value; const p=t.selectionStart; renderPay();
+    const el=document.getElementById('p_q'); el.focus(); el.setSelectionRange(p,p); }
+  if(t.id === 'mt_q'){ meetFilter.q = t.value; const p=t.selectionStart; renderMeet();
+    const el=document.getElementById('mt_q'); el.focus(); el.setSelectionRange(p,p); }
+});
+document.addEventListener('change', e=>{
+  const t = e.target;
+  if(t.id === 'p_status'){ payFilter.status = t.value; renderPay(); }
+  if(t.id === 'p_sort'){ payFilter.sort = t.value; renderPay(); }
+  if(t.dataset && t.dataset.itemDone !== undefined){
+    const m = DB.meetings.find(x=>x.id===t.dataset.itemDone);
+    const list = (m.items||[]).filter(i=>i.task);      // 화면에 보이는 목록 기준
+    const target = list[Number(t.dataset.idx)];
+    if(target) target.done = t.checked;
+    save();
+    const card = t.closest('.mtg');
+    const wasOpen = card ? card.classList.contains('open') : false;
+    renderMeet(); renderModal();
+    if(wasOpen){
+      const c = document.querySelector('[data-mtg="'+m.id+'"]');
+      if(c) c.classList.add('open');
+    }
+  }
+});
+/* 참석자 chip 입력 */
+document.addEventListener('keydown', e=>{
+  const t = e.target;
+  if(t.dataset && t.dataset.chip && e.key === 'Enter'){
+    e.preventDefault();
+    const v = t.value.trim(); if(!v) return;
+    form[t.dataset.chip].push(v); t.value=''; renderMeet();
+    const box = document.getElementById(t.dataset.chip==='ours'?'m_ours':'m_clients');
+    box.querySelector('input').focus();
+  }
+});
+
+/* ---------- 저장 로직 ---------- */
+function submitPay(){
+  const name = document.getElementById('p_name').value.trim();
+  const amt = parseMoney(document.getElementById('p_amt').value);
+  if(!name) return toast('업체명을 입력해 주세요.');
+  if(!amt) return toast('입금 요청 금액을 입력해 주세요.');
+  const data = {
+    name, dueDay: document.getElementById('p_day').value === 'EOM' ? 'EOM' : Number(document.getElementById('p_day').value),
+    amount: amt, owner: document.getElementById('p_owner').value.trim(),
+    method: document.getElementById('p_method').value, taxDay: document.getElementById('p_tax').value,
+    leads: form.leads.slice().sort((a,b)=>b-a), channels: form.channels.slice(),
+    memo: document.getElementById('p_memo').value.trim(), active: true
+  };
+  if(DB.schedules.some(x=>x.name === name))
+    if(!confirm('이미 같은 이름의 업체가 있습니다. 그래도 등록할까요?')) return;
+  DB.schedules.push({id:uid(), ...data});
+  form.leads = [3,1,0]; form.channels = ['사내알림'];
+  save(); renderAll();
+  toast(name + ' 입금 일정이 등록되었습니다. (수정은 목록의 ✏️ 버튼)');
+}
+
+function syncItemInputs(){
+  document.querySelectorAll('#m_items [data-it]').forEach(inp=>{
+    const i = Number(inp.dataset.i);
+    if(form.items[i]) form.items[i][inp.dataset.it] = inp.value;
+  });
+}
+function resetMeetForm(){ form.ours=[]; form.clients=[]; form.items=[]; form.mode='대면'; form.remind=true; form.remindAt='18:00'; }
+
+function submitMeet(){
+  syncItemInputs();
+  const company = document.getElementById('m_company').value.trim();
+  const date = document.getElementById('m_date').value;
+  const time = document.getElementById('m_time').value;
+  const agenda = document.getElementById('m_agenda').value.trim();
+  if(!company) return toast('업체명을 입력해 주세요.');
+  if(!date || !time) return toast('미팅 일시를 입력해 주세요.');
+  if(!agenda) return toast('안건을 입력해 주세요.');
+  const data = {
+    company, date, time, dur: document.getElementById('m_dur').value,
+    mode: form.mode || '대면', place: document.getElementById('m_place').value.trim(),
+    type: document.getElementById('m_type').value, agenda,
+    ours: form.ours.slice(), clients: form.clients.slice(),
+    notes: document.getElementById('m_notes').value,
+    decisions: document.getElementById('m_decisions').value,
+    items: form.items.filter(i=>i.task && i.task.trim()),
+    remind: form.remind !== false, remindAt: document.getElementById('m_remind_at').value
+  };
+  if(meetEdit){
+    const m = DB.meetings.find(x=>x.id===meetEdit); Object.assign(m, data);
+    meetEdit = null; toast('미팅 정보가 수정되었습니다.');
+  } else {
+    DB.meetings.push({id:uid(), ...data});
+    toast(company + ' 미팅이 등록되었습니다. 전날 ' + data.remindAt + ' 알림 예약됨.');
+  }
+  resetMeetForm(); save(); renderAll();
+}
+
+function copyMinutes(id){
+  const m = DB.meetings.find(x=>x.id===id);
+  const d = new Date(m.date+'T00:00');
+  const lines = [
+    '[' + m.company + ' 미팅 회의록]',
+    '· 일시 : ' + m.date + ' ' + (m.time||'') + ' (' + (m.dur||'') + ')',
+    '· 장소 : ' + (m.mode||'') + (m.place?' / '+m.place:''),
+    '· 구분 : ' + (m.type||''),
+    '· 참석 : 우리측 ' + ((m.ours||[]).join(', ')||'-') + ' / 고객측 ' + ((m.clients||[]).join(', ')||'-'),
+    '· 안건 : ' + (m.agenda||''),
+    '',
+    '[논의 내용]', m.notes || '-',
+    '', '[결정 사항]', m.decisions || '-',
+    '', '[액션 아이템]',
+    ...((m.items||[]).filter(i=>i.task).map((i,n)=> (n+1)+'. '+i.task+' ('+(i.owner||'담당 미지정')+(i.due?', ~'+i.due:'')+')'))
+  ];
+  const text = lines.join('\n');
+  navigator.clipboard ? navigator.clipboard.writeText(text).then(()=>toast('회의록이 복사되었습니다.'), ()=>fallbackCopy(text))
+                      : fallbackCopy(text);
+}
+function fallbackCopy(text){
+  const ta = document.createElement('textarea');
+  ta.value = text; document.body.appendChild(ta); ta.select();
+  try{ document.execCommand('copy'); toast('회의록이 복사되었습니다.'); }catch(e){ toast('복사에 실패했습니다.'); }
+  ta.remove();
+}
+
+/* ---------- 최초 실행 ---------- */
+(function init(){
+  resetMeetForm(); applyThemeLabel();
+  // 데모용 샘플 미팅 (최초 1회)
+  if(!DB.meetings.length && !localStorage.getItem(KEY+'_mt')){
+    const t = today();
+    const plus = n => fmtISO(new Date(t.getFullYear(), t.getMonth(), t.getDate()+n));
+    DB.meetings = [
+      {id:uid(), company:'하나마케팅(A지점)', date:plus(1), time:'14:00', dur:'1시간', mode:'대면',
+       place:'본원 3층 회의실', type:'정기 보고', agenda:'8월 광고 성과 리포트 및 9월 예산 협의',
+       ours:['홍길동 팀장','김민수 AE'], clients:['이 원장','최 실장'],
+       notes:'· 8월 DB 유입 전월 대비 18% 증가\n· 검색광고 CPC 상승으로 CPA 소폭 악화\n· 9월 신규 상품(리프팅) 랜딩 제작 요청',
+       decisions:'· 9월 예산 4,400,000원 동일 유지\n· 리프팅 랜딩페이지 9/5까지 시안 전달',
+       items:[{task:'9월 광고 운영안 초안 발송', owner:'김민수', due:plus(4), done:false},
+              {task:'리프팅 랜딩 시안 제작 요청', owner:'홍길동', due:plus(8), done:false}],
+       remind:true, remindAt:'18:00'},
+      {id:uid(), company:'한결의원', date:plus(6), time:'11:00', dur:'1시간 30분', mode:'화상',
+       place:'Google Meet', type:'계약 협의', agenda:'하반기 계약 연장 및 단가 조정 논의',
+       ours:['홍길동 팀장'], clients:['원장님'], notes:'', decisions:'', items:[],
+       remind:true, remindAt:'18:00'},
+      {id:uid(), company:'온누리의원', date:plus(-5), time:'15:00', dur:'1시간', mode:'대면',
+       place:'병원 원장실', type:'이슈 대응', agenda:'리뷰 이벤트 진행 관련 협의',
+       ours:['이영희 AE'], clients:['김 실장'],
+       notes:'· 리뷰 이벤트 참여율 저조 원인 분석\n· 경품 구성 변경 요청',
+       decisions:'· 경품을 시술 쿠폰으로 변경, 9월 1일부터 적용',
+       items:[{task:'변경 이벤트 배너 재제작', owner:'이영희', due:plus(-1), done:true}],
+       remind:true, remindAt:'18:00'}
+    ];
+    localStorage.setItem(KEY+'_mt','1'); save();
+  }
+  renderAll();
+})();
+</script>
+</body>
+</html>
